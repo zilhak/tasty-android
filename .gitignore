@@ -2,3 +2,20 @@
 .claude-workspace
 .DS_Store
 *.swp
+
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Android
+local.properties
+captures/
+*.apk
+*.aab
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
