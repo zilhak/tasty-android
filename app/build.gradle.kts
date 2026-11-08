@@ -26,6 +26,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        warningsAsErrors = true
+        abortOnError = true
+        checkDependencies = true
+        // Version freshness checks depend on what was released upstream, not on this code,
+        // so they would turn CI red without any change here. Version bumps are done by hand.
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable", "OldTargetApi")
+    }
 }
 
 kotlin {
