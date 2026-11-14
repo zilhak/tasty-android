@@ -7,9 +7,12 @@
   <string name="menu_workspaces">Workspaces</string>
   <string name="workspace_new">New workspace</string>
   <string name="workspace_close">Close workspace</string>
-  <string name="pane_split_right">Split right</string>
-  <string name="pane_split_down">Split down</string>
+  <string name="pane_split_right">Split pane right</string>
+  <string name="pane_split_down">Split pane down</string>
   <string name="pane_close">Close pane</string>
+  <string name="surface_split_right">Split surface right</string>
+  <string name="surface_split_down">Split surface down</string>
+  <string name="surface_close">Close surface</string>
   <string name="tab_new">New tab</string>
   <string name="tab_close">Close tab</string>
 </resources>

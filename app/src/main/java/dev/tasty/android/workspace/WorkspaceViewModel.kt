@@ -57,10 +57,15 @@ class WorkspaceViewModel(
 
     fun closePane(paneId: Long) = update { store.closePane(paneId.toULong()) }
 
-    fun focusPane(paneId: Long) {
-        val focused = _snapshot.value.layout.focusedPane
-        if (focused.toLong() != paneId) update { store.focusPane(paneId.toULong()) }
-    }
+    fun splitSurface(
+        surfaceId: Long,
+        orientation: SplitOrientation,
+    ) = update { store.splitSurface(surfaceId.toULong(), orientation) }
+
+    fun closeSurface(surfaceId: Long) = update { store.closeSurface(surfaceId.toULong()) }
+
+    /** Focuses a surface, which also selects its tab and focuses its pane. */
+    fun focusSurface(surfaceId: Long) = update { store.focusSurface(surfaceId.toULong()) }
 
     fun setSplitRatio(
         splitId: Long,

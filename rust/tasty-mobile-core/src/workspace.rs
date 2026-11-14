@@ -1,33 +1,41 @@
-//! Workspaces, split panes and tabs, following the desktop hierarchy
-//! (Workspace > pane tree > Pane > Tab > Surface) in the reduced form the app needs.
+//! Workspaces with the desktop's two layout levels: the upper layout places panes,
+//! each pane has its own tab bar, and each tab has a lower layout that places surfaces.
 //!
 //! The store only tracks structure. Kotlin owns the terminal sessions and keys them by
 //! surface id; after each change it compares [`StoreSnapshot::surfaces`] with its sessions.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-const MIN_RATIO: f32 = 0.1;
-const MAX_RATIO: f32 = 0.9;
+use crate::tree::{Leaf, Removal, SplitOrientation, Tree};
 
-/// How a split arranges its two children.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum SplitOrientation {
-    /// First child on the left, second on the right.
-    SideBySide,
-    /// First child on top, second below.
-    Stacked,
+/// One node of a tab's surface tree (lower layout).
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum SurfaceNode {
+    Surface {
+        id: u64,
+    },
+    Split {
+        id: u64,
+        orientation: SplitOrientation,
+        /// Share of the space given to `first`, between 0.1 and 0.9.
+        ratio: f32,
+        first: u64,
+        second: u64,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct TabInfo {
     pub id: u64,
-    pub surface_id: u64,
     pub title: String,
+    pub root: u64,
+    pub nodes: Vec<SurfaceNode>,
+    pub focused_surface: u64,
 }
 
-/// One node of a workspace's pane tree. Split children refer to other nodes by id.
+/// One node of a workspace's pane tree (upper layout).
 #[derive(Debug, Clone, PartialEq, uniffi::Enum)]
-pub enum LayoutNode {
+pub enum PaneNode {
     Pane {
         id: u64,
         tabs: Vec<TabInfo>,
@@ -47,7 +55,7 @@ pub enum LayoutNode {
 pub struct WorkspaceLayout {
     pub workspace_id: u64,
     pub root: u64,
-    pub nodes: Vec<LayoutNode>,
+    pub nodes: Vec<PaneNode>,
     pub focused_pane: u64,
 }
 
@@ -68,10 +76,22 @@ pub struct StoreSnapshot {
 }
 
 #[derive(Debug, Clone)]
+struct Surface {
+    id: u64,
+}
+
+impl Leaf for Surface {
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
+#[derive(Debug, Clone)]
 struct Tab {
     id: u64,
-    surface_id: u64,
     title: String,
+    layout: Tree<Surface>,
+    focused_surface: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -81,24 +101,40 @@ struct Pane {
     active_tab: u64,
 }
 
-#[derive(Debug, Clone)]
-enum Node {
-    Pane(Pane),
-    Split {
-        id: u64,
-        orientation: SplitOrientation,
-        ratio: f32,
-        first: Box<Node>,
-        second: Box<Node>,
-    },
+impl Leaf for Pane {
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Pane {
+    fn tab_with_surface(&mut self, surface_id: u64) -> Option<&mut Tab> {
+        self.tabs.iter_mut().find(|t| t.layout.contains(surface_id))
+    }
 }
 
 #[derive(Debug, Clone)]
 struct Workspace {
     id: u64,
     name: String,
-    root: Node,
+    layout: Tree<Pane>,
     focused_pane: u64,
+}
+
+impl Workspace {
+    fn pane_mut(&mut self, pane_id: u64) -> Option<&mut Pane> {
+        self.layout.find(&|p: &Pane| p.id == pane_id)
+    }
+
+    fn pane_with_tab(&mut self, tab_id: u64) -> Option<&mut Pane> {
+        self.layout
+            .find(&|p: &Pane| p.tabs.iter().any(|t| t.id == tab_id))
+    }
+
+    fn pane_with_surface(&mut self, surface_id: u64) -> Option<&mut Pane> {
+        self.layout
+            .find(&|p: &Pane| p.tabs.iter().any(|t| t.layout.contains(surface_id)))
+    }
 }
 
 struct State {
@@ -114,17 +150,11 @@ pub struct WorkspaceStore {
     state: Mutex<State>,
 }
 
-impl Default for WorkspaceStore {
-    fn default() -> Self {
-        Self::create()
-    }
-}
-
 #[uniffi::export]
 impl WorkspaceStore {
     #[uniffi::constructor]
-    pub fn new() -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self::create())
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::create())
     }
 
     pub fn snapshot(&self) -> StoreSnapshot {
@@ -150,47 +180,52 @@ impl WorkspaceStore {
         self.lock().close_workspace(workspace_id)
     }
 
-    /// Adds a tab to a pane of the active workspace, selects it and returns its surface id.
+    /// Adds a tab with one surface to a pane, selects it and returns the surface id.
     pub fn new_tab(&self, pane_id: u64) -> Option<u64> {
         let mut state = self.lock();
-        let (tab_id, surface_id) = (state.take_id(), state.take_id());
+        let tab = state.new_tab();
+        let (tab_id, surface_id) = (tab.id, tab.focused_surface);
         let workspace = state.active_workspace_mut();
-        let pane = find_pane(&mut workspace.root, pane_id)?;
-        pane.tabs.push(Tab {
-            id: tab_id,
-            surface_id,
-            title: default_tab_title(),
-        });
+        let pane = workspace.pane_mut(pane_id)?;
+        pane.tabs.push(tab);
         pane.active_tab = tab_id;
         workspace.focused_pane = pane_id;
         Some(surface_id)
     }
 
-    /// Selects a tab in the active workspace and focuses its pane.
+    /// Selects a tab and focuses its pane.
     pub fn select_tab(&self, tab_id: u64) -> bool {
         let mut state = self.lock();
         let workspace = state.active_workspace_mut();
-        let Some(pane) = find_pane_with_tab(&mut workspace.root, tab_id) else {
+        let Some(pane) = workspace.pane_with_tab(tab_id) else {
             return false;
         };
         pane.active_tab = tab_id;
-        workspace.focused_pane = pane.id;
+        let pane_id = pane.id;
+        workspace.focused_pane = pane_id;
         true
     }
 
-    /// Closes a tab in the active workspace. An emptied pane closes, and an emptied
-    /// workspace closes like [`WorkspaceStore::close_workspace`].
+    /// Closes a tab. An emptied pane closes, and an emptied workspace closes like
+    /// [`WorkspaceStore::close_workspace`].
     pub fn close_tab(&self, tab_id: u64) -> bool {
         self.lock().close_tab(tab_id)
     }
 
-    /// Splits a pane of the active workspace. The new pane gets one tab and the focus.
-    /// Returns the new pane's id.
+    /// Splits a pane. The new pane gets one tab and the focus. Returns the new pane's id.
     pub fn split_pane(&self, pane_id: u64, orientation: SplitOrientation) -> Option<u64> {
-        self.lock().split_pane(pane_id, orientation)
+        let mut state = self.lock();
+        let (split_id, pane) = (state.take_id(), state.new_pane());
+        let new_pane_id = pane.id;
+        let workspace = state.active_workspace_mut();
+        if !workspace.layout.split(pane_id, split_id, orientation, pane) {
+            return None;
+        }
+        workspace.focused_pane = new_pane_id;
+        Some(new_pane_id)
     }
 
-    /// Closes a pane of the active workspace with all its tabs.
+    /// Closes a pane with all its tabs.
     pub fn close_pane(&self, pane_id: u64) -> bool {
         self.lock().close_pane(pane_id)
     }
@@ -198,22 +233,78 @@ impl WorkspaceStore {
     pub fn focus_pane(&self, pane_id: u64) -> bool {
         let mut state = self.lock();
         let workspace = state.active_workspace_mut();
-        let found = find_pane(&mut workspace.root, pane_id).is_some();
+        let found = workspace.pane_mut(pane_id).is_some();
         if found {
             workspace.focused_pane = pane_id;
         }
         found
     }
 
-    /// Moves a split's divider. The ratio is clamped to 0.1..=0.9.
+    /// Splits a surface inside its tab. The new surface gets the focus; returns its id.
+    pub fn split_surface(&self, surface_id: u64, orientation: SplitOrientation) -> Option<u64> {
+        let mut state = self.lock();
+        let (split_id, new_id) = (state.take_id(), state.take_id());
+        let workspace = state.active_workspace_mut();
+        let tab = workspace
+            .pane_with_surface(surface_id)?
+            .tab_with_surface(surface_id)?;
+        if !tab
+            .layout
+            .split(surface_id, split_id, orientation, Surface { id: new_id })
+        {
+            return None;
+        }
+        tab.focused_surface = new_id;
+        Some(new_id)
+    }
+
+    /// Closes a surface. A tab left without surfaces closes like [`WorkspaceStore::close_tab`].
+    pub fn close_surface(&self, surface_id: u64) -> bool {
+        self.lock().close_surface(surface_id)
+    }
+
+    /// Focuses a surface, selecting its tab and focusing its pane.
+    pub fn focus_surface(&self, surface_id: u64) -> bool {
+        let mut state = self.lock();
+        let workspace = state.active_workspace_mut();
+        let Some(pane) = workspace.pane_with_surface(surface_id) else {
+            return false;
+        };
+        let pane_id = pane.id;
+        let Some(tab) = pane.tab_with_surface(surface_id) else {
+            return false;
+        };
+        tab.focused_surface = surface_id;
+        let tab_id = tab.id;
+        pane.active_tab = tab_id;
+        workspace.focused_pane = pane_id;
+        true
+    }
+
+    /// Moves the divider of a pane split or a surface split. The ratio is clamped to 0.1..=0.9.
     pub fn set_split_ratio(&self, split_id: u64, ratio: f32) -> bool {
         let mut state = self.lock();
         let workspace = state.active_workspace_mut();
-        set_ratio(
-            &mut workspace.root,
-            split_id,
-            ratio.clamp(MIN_RATIO, MAX_RATIO),
-        )
+        if workspace.layout.set_ratio(split_id, ratio) {
+            return true;
+        }
+        let mut changed = false;
+        for_each_pane_mut(&mut workspace.layout, &mut |pane| {
+            for tab in &mut pane.tabs {
+                changed |= tab.layout.set_ratio(split_id, ratio);
+            }
+        });
+        changed
+    }
+}
+
+fn for_each_pane_mut(tree: &mut Tree<Pane>, f: &mut impl FnMut(&mut Pane)) {
+    match tree {
+        Tree::Leaf(pane) => f(pane),
+        Tree::Split { first, second, .. } => {
+            for_each_pane_mut(first, f);
+            for_each_pane_mut(second, f);
+        }
     }
 }
 
@@ -243,16 +334,23 @@ impl State {
         id
     }
 
+    fn new_tab(&mut self) -> Tab {
+        let (tab_id, surface_id) = (self.take_id(), self.take_id());
+        Tab {
+            id: tab_id,
+            title: "Terminal".to_owned(),
+            layout: Tree::Leaf(Surface { id: surface_id }),
+            focused_surface: surface_id,
+        }
+    }
+
     fn new_pane(&mut self) -> Pane {
-        let (pane_id, tab_id, surface_id) = (self.take_id(), self.take_id(), self.take_id());
+        let pane_id = self.take_id();
+        let tab = self.new_tab();
         Pane {
             id: pane_id,
-            tabs: vec![Tab {
-                id: tab_id,
-                surface_id,
-                title: default_tab_title(),
-            }],
-            active_tab: tab_id,
+            active_tab: tab.id,
+            tabs: vec![tab],
         }
     }
 
@@ -264,7 +362,7 @@ impl State {
             id,
             name: format!("Workspace {}", self.created_workspaces),
             focused_pane: pane.id,
-            root: Node::Pane(pane),
+            layout: Tree::Leaf(pane),
         });
         self.active = id;
         id
@@ -296,7 +394,7 @@ impl State {
 
     fn close_tab(&mut self, tab_id: u64) -> bool {
         let workspace = self.active_workspace_mut();
-        let Some(pane) = find_pane_with_tab(&mut workspace.root, tab_id) else {
+        let Some(pane) = workspace.pane_with_tab(tab_id) else {
             return false;
         };
         let index = pane.tabs.iter().position(|t| t.id == tab_id).unwrap_or(0);
@@ -313,38 +411,44 @@ impl State {
 
     fn close_pane(&mut self, pane_id: u64) -> bool {
         let workspace = self.active_workspace_mut();
-        match remove_pane(workspace.root.clone(), pane_id) {
+        match workspace.layout.clone().remove(pane_id) {
             Removal::NotFound => false,
             Removal::Emptied => {
                 let id = workspace.id;
                 self.close_workspace(id)
             }
-            Removal::Kept(root) => {
-                workspace.root = root;
+            Removal::Kept(layout) => {
+                workspace.layout = layout;
                 if workspace.focused_pane == pane_id {
-                    workspace.focused_pane = first_pane_id(&workspace.root);
+                    workspace.focused_pane = workspace.layout.first_leaf().id;
                 }
                 true
             }
         }
     }
 
-    fn split_pane(&mut self, pane_id: u64, orientation: SplitOrientation) -> Option<u64> {
-        let split_id = self.take_id();
-        let new_pane = self.new_pane();
-        let new_pane_id = new_pane.id;
+    fn close_surface(&mut self, surface_id: u64) -> bool {
         let workspace = self.active_workspace_mut();
-        let target = find_node_of_pane(&mut workspace.root, pane_id)?;
-        let old = std::mem::replace(target, Node::Pane(new_pane.clone()));
-        *target = Node::Split {
-            id: split_id,
-            orientation,
-            ratio: 0.5,
-            first: Box::new(old),
-            second: Box::new(Node::Pane(new_pane)),
+        let Some(tab) = workspace
+            .pane_with_surface(surface_id)
+            .and_then(|pane| pane.tab_with_surface(surface_id))
+        else {
+            return false;
         };
-        workspace.focused_pane = new_pane_id;
-        Some(new_pane_id)
+        match tab.layout.clone().remove(surface_id) {
+            Removal::NotFound => false,
+            Removal::Emptied => {
+                let tab_id = tab.id;
+                self.close_tab(tab_id)
+            }
+            Removal::Kept(layout) => {
+                tab.layout = layout;
+                if tab.focused_surface == surface_id {
+                    tab.focused_surface = tab.layout.first_leaf().id;
+                }
+                true
+            }
+        }
     }
 
     fn snapshot(&self) -> StoreSnapshot {
@@ -354,11 +458,25 @@ impl State {
             .find(|w| w.id == self.active)
             .unwrap_or(&self.workspaces[0]);
         let mut nodes = Vec::new();
-        flatten(&active.root, &mut nodes);
-        let mut surfaces = Vec::new();
-        for workspace in &self.workspaces {
-            collect_surfaces(&workspace.root, &mut surfaces);
-        }
+        active.layout.flatten(
+            &pane_node,
+            &|id, orientation, ratio, first, second| PaneNode::Split {
+                id,
+                orientation,
+                ratio,
+                first,
+                second,
+            },
+            &mut nodes,
+        );
+        let surfaces = self
+            .workspaces
+            .iter()
+            .flat_map(|w| w.layout.leaves())
+            .flat_map(|pane| pane.tabs.iter())
+            .flat_map(|tab| tab.layout.leaves())
+            .map(|surface| surface.id)
+            .collect();
         StoreSnapshot {
             workspaces: self
                 .workspaces
@@ -371,7 +489,7 @@ impl State {
             active_workspace: active.id,
             layout: WorkspaceLayout {
                 workspace_id: active.id,
-                root: node_id(&active.root),
+                root: active.layout.node_id(),
                 nodes,
                 focused_pane: active.focused_pane,
             },
@@ -380,157 +498,33 @@ impl State {
     }
 }
 
-fn default_tab_title() -> String {
-    "Terminal".to_owned()
-}
-
-fn node_id(node: &Node) -> u64 {
-    match node {
-        Node::Pane(pane) => pane.id,
-        Node::Split { id, .. } => *id,
+fn pane_node(pane: &Pane) -> PaneNode {
+    PaneNode::Pane {
+        id: pane.id,
+        tabs: pane.tabs.iter().map(tab_info).collect(),
+        active_tab: pane.active_tab,
     }
 }
 
-fn first_pane_id(node: &Node) -> u64 {
-    match node {
-        Node::Pane(pane) => pane.id,
-        Node::Split { first, .. } => first_pane_id(first),
-    }
-}
-
-fn find_pane(node: &mut Node, pane_id: u64) -> Option<&mut Pane> {
-    match node {
-        Node::Pane(pane) => (pane.id == pane_id).then_some(pane),
-        Node::Split { first, second, .. } => {
-            find_pane(first, pane_id).or_else(|| find_pane(second, pane_id))
-        }
-    }
-}
-
-fn find_pane_with_tab(node: &mut Node, tab_id: u64) -> Option<&mut Pane> {
-    match node {
-        Node::Pane(pane) => pane.tabs.iter().any(|t| t.id == tab_id).then_some(pane),
-        Node::Split { first, second, .. } => {
-            find_pane_with_tab(first, tab_id).or_else(|| find_pane_with_tab(second, tab_id))
-        }
-    }
-}
-
-fn find_node_of_pane(node: &mut Node, pane_id: u64) -> Option<&mut Node> {
-    if matches!(node, Node::Pane(pane) if pane.id == pane_id) {
-        return Some(node);
-    }
-    match node {
-        Node::Pane(_) => None,
-        Node::Split { first, second, .. } => {
-            find_node_of_pane(first, pane_id).or_else(|| find_node_of_pane(second, pane_id))
-        }
-    }
-}
-
-fn set_ratio(node: &mut Node, split_id: u64, value: f32) -> bool {
-    match node {
-        Node::Pane(_) => false,
-        Node::Split {
-            id,
-            ratio,
-            first,
-            second,
-            ..
-        } => {
-            if *id == split_id {
-                *ratio = value;
-                return true;
-            }
-            set_ratio(first, split_id, value) || set_ratio(second, split_id, value)
-        }
-    }
-}
-
-enum Removal {
-    NotFound,
-    /// The removed pane was the whole tree.
-    Emptied,
-    Kept(Node),
-}
-
-/// Removes a pane; its parent split is replaced by the sibling.
-fn remove_pane(node: Node, pane_id: u64) -> Removal {
-    match node {
-        Node::Pane(pane) if pane.id == pane_id => Removal::Emptied,
-        Node::Pane(_) => Removal::NotFound,
-        Node::Split {
+fn tab_info(tab: &Tab) -> TabInfo {
+    let mut nodes = Vec::new();
+    tab.layout.flatten(
+        &|surface: &Surface| SurfaceNode::Surface { id: surface.id },
+        &|id, orientation, ratio, first, second| SurfaceNode::Split {
             id,
             orientation,
             ratio,
             first,
             second,
-        } => match remove_pane(*first.clone(), pane_id) {
-            Removal::Emptied => Removal::Kept(*second),
-            Removal::Kept(first) => Removal::Kept(Node::Split {
-                id,
-                orientation,
-                ratio,
-                first: Box::new(first),
-                second,
-            }),
-            Removal::NotFound => match remove_pane(*second, pane_id) {
-                Removal::Emptied => Removal::Kept(*first),
-                Removal::Kept(second) => Removal::Kept(Node::Split {
-                    id,
-                    orientation,
-                    ratio,
-                    first,
-                    second: Box::new(second),
-                }),
-                Removal::NotFound => Removal::NotFound,
-            },
         },
-    }
-}
-
-fn flatten(node: &Node, out: &mut Vec<LayoutNode>) {
-    match node {
-        Node::Pane(pane) => out.push(LayoutNode::Pane {
-            id: pane.id,
-            tabs: pane
-                .tabs
-                .iter()
-                .map(|t| TabInfo {
-                    id: t.id,
-                    surface_id: t.surface_id,
-                    title: t.title.clone(),
-                })
-                .collect(),
-            active_tab: pane.active_tab,
-        }),
-        Node::Split {
-            id,
-            orientation,
-            ratio,
-            first,
-            second,
-        } => {
-            out.push(LayoutNode::Split {
-                id: *id,
-                orientation: *orientation,
-                ratio: *ratio,
-                first: node_id(first),
-                second: node_id(second),
-            });
-            flatten(first, out);
-            flatten(second, out);
-        }
-    }
-}
-
-fn collect_surfaces(node: &Node, out: &mut Vec<u64>) {
-    match node {
-        Node::Pane(pane) => out.extend(pane.tabs.iter().map(|t| t.surface_id)),
-        Node::Split { first, second, .. } => {
-            collect_surfaces(first, out);
-            collect_surfaces(second, out);
-        }
+        &mut nodes,
+    );
+    TabInfo {
+        id: tab.id,
+        title: tab.title.clone(),
+        root: tab.layout.node_id(),
+        nodes,
+        focused_surface: tab.focused_surface,
     }
 }
 
@@ -538,50 +532,55 @@ fn collect_surfaces(node: &Node, out: &mut Vec<u64>) {
 mod tests {
     use super::*;
 
-    fn panes(snapshot: &StoreSnapshot) -> Vec<(u64, Vec<u64>, u64)> {
+    fn panes(snapshot: &StoreSnapshot) -> Vec<(u64, Vec<TabInfo>, u64)> {
         snapshot
             .layout
             .nodes
             .iter()
             .filter_map(|n| match n {
-                LayoutNode::Pane {
+                PaneNode::Pane {
                     id,
                     tabs,
                     active_tab,
-                } => Some((*id, tabs.iter().map(|t| t.id).collect(), *active_tab)),
-                LayoutNode::Split { .. } => None,
+                } => Some((*id, tabs.clone(), *active_tab)),
+                PaneNode::Split { .. } => None,
             })
             .collect()
     }
 
+    fn first_tab(store: &WorkspaceStore) -> TabInfo {
+        panes(&store.snapshot())[0].1[0].clone()
+    }
+
     #[test]
-    fn starts_with_one_workspace_holding_one_tab() {
+    fn starts_with_one_workspace_holding_one_tab_and_surface() {
         let store = WorkspaceStore::create();
         let snap = store.snapshot();
         assert_eq!(snap.workspaces.len(), 1);
         assert_eq!(snap.workspaces[0].name, "Workspace 1");
         let panes = panes(&snap);
         assert_eq!(panes.len(), 1);
-        assert_eq!(panes[0].1.len(), 1);
-        assert_eq!(snap.layout.focused_pane, panes[0].0);
-        assert_eq!(snap.surfaces.len(), 1);
+        let tab = &panes[0].1[0];
+        assert_eq!(tab.nodes, vec![SurfaceNode::Surface { id: tab.root }]);
+        assert_eq!(tab.focused_surface, tab.root);
+        assert_eq!(snap.surfaces, vec![tab.root]);
     }
 
     #[test]
     fn new_tab_is_selected_and_closing_it_selects_a_neighbour() {
         let store = WorkspaceStore::create();
         let pane = store.snapshot().layout.focused_pane;
-        let first_tab = panes(&store.snapshot())[0].1[0];
+        let first = first_tab(&store).id;
         assert!(store.new_tab(pane).is_some());
         let (_, tabs, active) = panes(&store.snapshot())[0].clone();
         assert_eq!(tabs.len(), 2);
-        assert_eq!(active, tabs[1]);
-        assert!(store.close_tab(tabs[1]));
-        assert_eq!(panes(&store.snapshot())[0].2, first_tab);
+        assert_eq!(active, tabs[1].id);
+        assert!(store.close_tab(tabs[1].id));
+        assert_eq!(panes(&store.snapshot())[0].2, first);
     }
 
     #[test]
-    fn split_adds_a_focused_pane_and_closing_it_restores_the_tree() {
+    fn pane_split_adds_a_focused_pane_and_closing_it_restores_the_tree() {
         let store = WorkspaceStore::create();
         let original = store.snapshot().layout.focused_pane;
         let new_pane = store
@@ -589,23 +588,13 @@ mod tests {
             .unwrap();
         let snap = store.snapshot();
         assert_eq!(snap.layout.focused_pane, new_pane);
-        let LayoutNode::Split {
-            first,
-            second,
-            orientation,
-            ..
-        } = &snap.layout.nodes[0]
-        else {
+        let PaneNode::Split { first, second, .. } = &snap.layout.nodes[0] else {
             panic!("root must be a split: {:?}", snap.layout.nodes);
         };
-        assert_eq!(
-            (*first, *second, *orientation),
-            (original, new_pane, SplitOrientation::SideBySide)
-        );
+        assert_eq!((*first, *second), (original, new_pane));
         assert_eq!(snap.surfaces.len(), 2);
 
-        let new_tab = panes(&snap)[1].1[0];
-        assert!(store.close_tab(new_tab));
+        assert!(store.close_tab(panes(&snap)[1].1[0].id));
         let snap = store.snapshot();
         assert_eq!(snap.layout.root, original);
         assert_eq!(snap.layout.focused_pane, original);
@@ -613,7 +602,48 @@ mod tests {
     }
 
     #[test]
-    fn nested_split_removes_only_the_closed_pane() {
+    fn surface_split_stays_inside_its_tab() {
+        let store = WorkspaceStore::create();
+        let pane = store.snapshot().layout.focused_pane;
+        let surface = first_tab(&store).root;
+        let added = store
+            .split_surface(surface, SplitOrientation::Stacked)
+            .unwrap();
+        let tab = first_tab(&store);
+        assert_eq!(tab.focused_surface, added);
+        assert_eq!(tab.nodes.len(), 3);
+        assert_eq!(store.snapshot().surfaces, vec![surface, added]);
+
+        // A second tab does not see the first tab's split.
+        store.new_tab(pane);
+        let second = panes(&store.snapshot())[0].1[1].clone();
+        assert_eq!(second.nodes.len(), 1);
+
+        assert!(store.focus_surface(surface));
+        let snap = store.snapshot();
+        assert_eq!(panes(&snap)[0].2, tab.id);
+        assert_eq!(first_tab(&store).focused_surface, surface);
+    }
+
+    #[test]
+    fn closing_the_last_surface_closes_the_tab() {
+        let store = WorkspaceStore::create();
+        let pane = store.snapshot().layout.focused_pane;
+        store.new_tab(pane);
+        let first = first_tab(&store);
+        let added = store
+            .split_surface(first.root, SplitOrientation::SideBySide)
+            .unwrap();
+        assert!(store.close_surface(added));
+        assert_eq!(first_tab(&store).nodes.len(), 1);
+        assert!(store.close_surface(first.root));
+        let tabs = &panes(&store.snapshot())[0].1;
+        assert_eq!(tabs.len(), 1);
+        assert_ne!(tabs[0].id, first.id);
+    }
+
+    #[test]
+    fn nested_pane_split_removes_only_the_closed_pane() {
         let store = WorkspaceStore::create();
         let a = store.snapshot().layout.focused_pane;
         let b = store.split_pane(a, SplitOrientation::SideBySide).unwrap();
@@ -629,8 +659,7 @@ mod tests {
         let first = store.snapshot().active_workspace;
         let second = store.new_workspace();
         assert_eq!(store.snapshot().active_workspace, second);
-        let tab = panes(&store.snapshot())[0].1[0];
-        assert!(store.close_tab(tab));
+        assert!(store.close_tab(first_tab(&store).id));
         let snap = store.snapshot();
         assert_eq!(snap.workspaces.len(), 1);
         assert_eq!(snap.active_workspace, first);
@@ -652,15 +681,21 @@ mod tests {
     }
 
     #[test]
-    fn split_ratio_is_clamped() {
+    fn split_ratio_reaches_both_levels() {
         let store = WorkspaceStore::create();
         let pane = store.snapshot().layout.focused_pane;
         store.split_pane(pane, SplitOrientation::Stacked);
-        let split = store.snapshot().layout.root;
-        assert!(store.set_split_ratio(split, 2.0));
-        let LayoutNode::Split { ratio, .. } = store.snapshot().layout.nodes[0] else {
-            panic!("root must be a split");
+        let pane_split = store.snapshot().layout.root;
+        assert!(store.set_split_ratio(pane_split, 0.3));
+
+        let surface = first_tab(&store).root;
+        store.split_surface(surface, SplitOrientation::SideBySide);
+        let surface_split = first_tab(&store).root;
+        assert!(store.set_split_ratio(surface_split, 0.7));
+        let SurfaceNode::Split { ratio, .. } = first_tab(&store).nodes[0] else {
+            panic!("tab root must be a split");
         };
-        assert!((ratio - MAX_RATIO).abs() < f32::EPSILON);
+        assert!((ratio - 0.7).abs() < f32::EPSILON);
+        assert!(!store.set_split_ratio(9999, 0.5));
     }
 }
