@@ -10,7 +10,7 @@ mod workspace;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use tasty_terminal::{Pty, Terminal, TerminalConfig, spawn_terminal};
+use tasty_terminal::{Pty, Terminal, TerminalConfig, TerminalViewport, spawn_terminal};
 
 pub use snapshot::{CellColor, ScreenSnapshot, TextSpan};
 pub use tree::SplitOrientation;
@@ -64,6 +64,8 @@ impl std::error::Error for TerminalError {}
 struct Inner {
     terminal: Terminal,
     pty: Pty,
+    /// Reading position. The terminal keeps the history; the view owns where it reads.
+    viewport: TerminalViewport,
     exited: bool,
 }
 
@@ -106,17 +108,38 @@ impl TerminalSession {
             inner: Mutex::new(Inner {
                 terminal,
                 pty,
+                viewport: TerminalViewport::LIVE,
                 exited: false,
             }),
         }))
     }
 
-    /// Sends raw input bytes (typed text or encoded keys) to the shell.
+    /// Sends raw input bytes (typed text or encoded keys) to the shell and returns the
+    /// view to the live screen.
     pub fn write(&self, data: Vec<u8>) {
         let mut inner = self.lock();
         if !inner.exited {
+            inner.viewport.scroll_to_bottom();
             inner.terminal.send_bytes(&data);
         }
+    }
+
+    /// Scrolls the view: positive `rows` moves back into the history, negative toward the
+    /// live screen. The alternate screen (full-screen programs) has no history to scroll.
+    pub fn scroll_by(&self, rows: i32) {
+        let mut inner = self.lock();
+        let cut = inner.terminal.content_cut();
+        let amount = rows.unsigned_abs() as usize;
+        if rows > 0 {
+            inner.viewport.scroll_up(cut, amount);
+        } else {
+            inner.viewport.scroll_down(cut, amount);
+        }
+    }
+
+    /// Returns the view to the live screen.
+    pub fn scroll_to_bottom(&self) {
+        self.lock().viewport.scroll_to_bottom();
     }
 
     /// Resizes the grid and tells the shell about the new size.
@@ -136,7 +159,7 @@ impl TerminalSession {
             inner.exited = true;
         }
         let inner = &*inner;
-        snapshot::capture(&inner.terminal, inner.exited)
+        snapshot::capture(&inner.terminal, &inner.viewport, inner.exited)
     }
 
     /// Whether arrow keys must be sent in application mode (`ESC O A` instead of `ESC [ A`).

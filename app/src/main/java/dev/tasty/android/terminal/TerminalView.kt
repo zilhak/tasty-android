@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.InputType
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -14,6 +15,7 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.widget.OverScroller
 import androidx.core.graphics.withTranslation
 import dev.tasty.android.R
 import dev.tasty.android.core.CellColor
@@ -56,6 +58,8 @@ class TerminalView(
     private var rows = 0
     private var composing = ""
     private val onOutput: () -> Unit = { postInvalidateOnAnimation() }
+    private val scrollBarWidth =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, SCROLL_BAR_DP, resources.displayMetrics)
 
     init {
         val metrics = textPaint.fontMetrics
@@ -97,6 +101,7 @@ class TerminalView(
                 snapshot.lines.forEachIndexed { row, spans -> spans.forEach { drawSpan(this, row, it) } }
                 drawCursor(this, snapshot)
             }
+            drawScrollIndicator(canvas, snapshot)
             if (snapshot.exited) model.markExited()
         }
         val error = model.status.error
@@ -195,12 +200,85 @@ class TerminalView(
         textPaint.isStrikeThruText = false
     }
 
+    /** Dragging scrolls the history (down reveals older rows); a tap focuses and opens the keyboard. */
+    private val gestures =
+        GestureDetector(
+            context,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean {
+                    scroller.forceFinished(true)
+                    scrollRemainder = 0f
+                    return true
+                }
+
+                override fun onSingleTapUp(e: MotionEvent): Boolean = performClick()
+
+                override fun onScroll(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    distanceX: Float,
+                    distanceY: Float,
+                ): Boolean {
+                    scrollPixels(-distanceY)
+                    return true
+                }
+
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float,
+                ): Boolean {
+                    flingLastY = 0
+                    scroller.fling(0, 0, 0, velocityY.toInt(), 0, 0, Int.MIN_VALUE, Int.MAX_VALUE)
+                    postInvalidateOnAnimation()
+                    return true
+                }
+            },
+        )
+    private val scroller = OverScroller(context)
+    private var scrollRemainder = 0f
+    private var flingLastY = 0
+
     @SuppressLint("ClickableViewAccessibility")
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            performClick()
+    override fun onTouchEvent(event: MotionEvent): Boolean = gestures.onTouchEvent(event)
+
+    override fun computeScroll() {
+        if (scroller.computeScrollOffset()) {
+            val y = scroller.currY
+            scrollPixels((y - flingLastY).toFloat())
+            flingLastY = y
+            postInvalidateOnAnimation()
         }
-        return true
+    }
+
+    /** Moves the view by whole rows; positive [pixels] (finger moving down) goes back in history. */
+    private fun scrollPixels(pixels: Float) {
+        scrollRemainder += pixels
+        val rows = (scrollRemainder / cellHeight).toInt()
+        if (rows == 0) return
+        scrollRemainder -= rows * cellHeight
+        model.session?.scrollBy(rows)
+        invalidate()
+    }
+
+    /** A thin bar on the right edge showing where the shown rows sit in the history. */
+    private fun drawScrollIndicator(
+        canvas: Canvas,
+        snapshot: ScreenSnapshot,
+    ) {
+        if (snapshot.scrollOffset == 0u) return
+        val rows = snapshot.rows.toFloat()
+        val total = snapshot.historyLen.toFloat() + rows
+        val track = (height - paddingTop - paddingBottom).toFloat()
+        val barHeight = max(track * rows / total, cellHeight)
+        val top =
+            paddingTop + (track - barHeight) * (1f - snapshot.scrollOffset.toFloat() / snapshot.historyLen.toFloat())
+        fillPaint.color = palette.foreground
+        fillPaint.alpha = SCROLL_BAR_ALPHA
+        val right = (width - paddingRight).toFloat()
+        canvas.drawRect(right - scrollBarWidth, top, right, top + barHeight, fillPaint)
+        fillPaint.alpha = OPAQUE
     }
 
     override fun performClick(): Boolean {
@@ -301,6 +379,8 @@ class TerminalView(
         const val CURSOR_ALPHA = 0xA0
         const val OPAQUE = 0xFF
         const val NOTICE_BACKGROUND = 8
+        const val SCROLL_BAR_ALPHA = 0x80
+        const val SCROLL_BAR_DP = 3f
         const val DEL: Byte = 0x7f
 
         // Matches FLAG_* in rust/tasty-mobile-core/src/snapshot.rs.
