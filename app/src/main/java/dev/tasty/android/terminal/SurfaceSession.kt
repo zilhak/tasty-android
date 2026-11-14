@@ -1,17 +1,13 @@
 package dev.tasty.android.terminal
 
-import android.app.Application
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import androidx.lifecycle.AndroidViewModel
 import dev.tasty.android.core.EnvVar
 import dev.tasty.android.core.OutputListener
 import dev.tasty.android.core.ShellConfig
 import dev.tasty.android.core.TerminalException
 import dev.tasty.android.core.TerminalSession
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Shell state shown outside the terminal grid. */
@@ -22,49 +18,52 @@ data class TerminalStatus(
 )
 
 /**
- * Owns the local shell so it survives configuration changes such as rotation.
- *
- * The shell starts on the first [ensureStarted] call, once the view knows its grid size.
+ * The local shell behind one surface. The shell starts on the first [ensureStarted] call,
+ * once a view knows the grid size, and lives until [close].
  */
-class TerminalViewModel(
-    application: Application,
-) : AndroidViewModel(application) {
+class SurfaceSession(
+    private val context: Context,
+    val surfaceId: Long,
+    private val onStatusChanged: (SurfaceSession) -> Unit,
+) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val updatePending = AtomicBoolean(false)
     private val listeners = mutableSetOf<() -> Unit>()
-    private val _status = MutableStateFlow(TerminalStatus())
 
-    val status: StateFlow<TerminalStatus> = _status.asStateFlow()
+    var status = TerminalStatus()
+        private set
 
     var session: TerminalSession? = null
         private set
 
-    /** Starts the shell with the given grid size unless it is already running. */
+    /** Starts the shell with the given grid size, or resizes the running one. */
     fun ensureStarted(
         cols: Int,
         rows: Int,
     ) {
-        if (session != null) {
-            session?.resize(cols.toUInt(), rows.toUInt())
+        session?.let {
+            it.resize(cols.toUInt(), rows.toUInt())
             return
         }
+        if (status.error != null) return
         session =
             try {
                 TerminalSession.start(shellConfig(cols, rows), Listener())
             } catch (e: TerminalException) {
-                _status.value = TerminalStatus(error = (e as? TerminalException.SpawnFailed)?.reason ?: e.message)
+                updateStatus(TerminalStatus(error = (e as? TerminalException.SpawnFailed)?.reason ?: e.message))
                 null
             }
-        if (session != null) _status.value = TerminalStatus()
         notifyListeners()
     }
 
-    /** Starts a new shell after the previous one exited. */
+    /** Starts a new shell after the previous one exited or failed to start. */
     fun restart(
         cols: Int,
         rows: Int,
     ) {
-        closeSession()
+        session?.close()
+        session = null
+        updateStatus(TerminalStatus())
         ensureStarted(cols, rows)
     }
 
@@ -79,29 +78,30 @@ class TerminalViewModel(
 
     /** Called by the view after drawing a snapshot that shows the shell has exited. */
     fun markExited() {
-        if (!_status.value.exited) _status.value = _status.value.copy(exited = true)
+        if (!status.exited) updateStatus(status.copy(exited = true))
     }
 
-    override fun onCleared() {
-        closeSession()
+    fun close() {
+        session?.close()
+        session = null
         listeners.clear()
     }
 
-    private fun closeSession() {
-        session?.close()
-        session = null
+    private fun updateStatus(next: TerminalStatus) {
+        if (next == status) return
+        status = next
+        onStatusChanged(this)
     }
 
     private fun shellConfig(
         cols: Int,
         rows: Int,
     ): ShellConfig {
-        val app = getApplication<Application>()
-        val home = app.filesDir.absolutePath
+        val home = context.filesDir.absolutePath
         val env =
             listOf(
                 EnvVar("HOME", home),
-                EnvVar("TMPDIR", app.cacheDir.absolutePath),
+                EnvVar("TMPDIR", context.cacheDir.absolutePath),
                 EnvVar("COLORTERM", "truecolor"),
             )
         return ShellConfig(
@@ -116,7 +116,7 @@ class TerminalViewModel(
 
     private fun notifyListeners() {
         val title = session?.title()
-        if (title != _status.value.title) _status.value = _status.value.copy(title = title)
+        if (title != status.title) updateStatus(status.copy(title = title))
         listeners.toList().forEach { it() }
     }
 

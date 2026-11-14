@@ -3,4 +3,13 @@
   <string name="app_name">Tasty</string>
   <string name="terminal_exited">Shell exited. Tap to start a new one.</string>
   <string name="terminal_start_failed">Could not start the shell: %1$s</string>
+  <string name="menu_open">Tasty menu</string>
+  <string name="menu_workspaces">Workspaces</string>
+  <string name="workspace_new">New workspace</string>
+  <string name="workspace_close">Close workspace</string>
+  <string name="pane_split_right">Split right</string>
+  <string name="pane_split_down">Split down</string>
+  <string name="pane_close">Close pane</string>
+  <string name="tab_new">New tab</string>
+  <string name="tab_close">Close tab</string>
 </resources>

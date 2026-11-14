@@ -4,6 +4,7 @@
 //! and draw its screen. Kotlin owns the theme, so colors cross the boundary unresolved.
 
 mod snapshot;
+mod workspace;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -11,6 +12,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tasty_terminal::{Pty, Terminal, TerminalConfig, spawn_terminal};
 
 pub use snapshot::{CellColor, ScreenSnapshot, TextSpan};
+pub use workspace::{
+    LayoutNode, SplitOrientation, StoreSnapshot, TabInfo, WorkspaceLayout, WorkspaceStore,
+    WorkspaceSummary,
+};
 
 uniffi::setup_scaffolding!();
 

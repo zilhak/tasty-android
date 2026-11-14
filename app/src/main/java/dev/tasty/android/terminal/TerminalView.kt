@@ -15,6 +15,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import androidx.core.graphics.withTranslation
+import dev.tasty.android.R
 import dev.tasty.android.core.CellColor
 import dev.tasty.android.core.ScreenSnapshot
 import dev.tasty.android.core.TextSpan
@@ -25,14 +26,23 @@ import kotlin.math.max
 /**
  * Draws the shell screen and sends keyboard input to it.
  *
- * Tapping the view shows the soft keyboard, or restarts the shell after it exited.
+ * Tapping the view calls [onTap], shows the soft keyboard, and restarts the shell after it
+ * exited. Only the [active] view takes the keyboard focus when it appears.
  */
 @SuppressLint("ViewConstructor")
 class TerminalView(
     context: Context,
-    private val model: TerminalViewModel,
+    private val model: SurfaceSession,
     private val palette: TerminalPalette = TerminalPalette.DARK,
 ) : View(context) {
+    var onTap: () -> Unit = {}
+
+    var active: Boolean = false
+        set(value) {
+            field = value
+            if (value && isAttachedToWindow) requestFocus()
+        }
+
     private val textPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.MONOSPACE
@@ -59,7 +69,7 @@ class TerminalView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         model.addOutputListener(onOutput)
-        requestFocus()
+        if (active) requestFocus()
     }
 
     override fun onDetachedFromWindow() {
@@ -81,12 +91,33 @@ class TerminalView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val snapshot = model.session?.snapshot() ?: return
-        canvas.withTranslation(paddingLeft.toFloat(), paddingTop.toFloat()) {
-            snapshot.lines.forEachIndexed { row, spans -> spans.forEach { drawSpan(this, row, it) } }
-            drawCursor(this, snapshot)
+        val snapshot = model.session?.snapshot()
+        if (snapshot != null) {
+            canvas.withTranslation(paddingLeft.toFloat(), paddingTop.toFloat()) {
+                snapshot.lines.forEachIndexed { row, spans -> spans.forEach { drawSpan(this, row, it) } }
+                drawCursor(this, snapshot)
+            }
+            if (snapshot.exited) model.markExited()
         }
-        if (snapshot.exited) model.markExited()
+        val error = model.status.error
+        when {
+            error != null -> drawNotice(canvas, context.getString(R.string.terminal_start_failed, error))
+            model.status.exited -> drawNotice(canvas, context.getString(R.string.terminal_exited))
+        }
+    }
+
+    /** Draws a one-line notice on the last row, over the screen contents. */
+    private fun drawNotice(
+        canvas: Canvas,
+        text: String,
+    ) {
+        val top = height - paddingBottom - cellHeight
+        fillPaint.color = palette.indexed(NOTICE_BACKGROUND)
+        canvas.drawRect(0f, top, width.toFloat(), top + cellHeight, fillPaint)
+        resetTextStyle()
+        textPaint.isUnderlineText = false
+        textPaint.color = palette.foreground
+        canvas.drawText(text, paddingLeft.toFloat(), top + baseline, textPaint)
     }
 
     private fun drawSpan(
@@ -174,7 +205,8 @@ class TerminalView(
 
     override fun performClick(): Boolean {
         super.performClick()
-        if (model.status.value.exited) {
+        onTap()
+        if (model.status.exited || model.status.error != null) {
             model.restart(cols, rows)
             invalidate()
         }
@@ -268,6 +300,7 @@ class TerminalView(
         const val ITALIC_SKEW = -0.25f
         const val CURSOR_ALPHA = 0xA0
         const val OPAQUE = 0xFF
+        const val NOTICE_BACKGROUND = 8
         const val DEL: Byte = 0x7f
 
         // Matches FLAG_* in rust/tasty-mobile-core/src/snapshot.rs.
