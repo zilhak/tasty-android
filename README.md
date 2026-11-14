@@ -7,6 +7,10 @@ The Android app for Tasty, built with Kotlin and Jetpack Compose.
 - JDK 21 (`JAVA_HOME` set)
 - Android SDK with `platforms;android-37.0` and `build-tools;37.0.0`. Set `ANDROID_HOME`; `local.properties` is not committed.
 
+- Android NDK `30.0.16248370` (`sdkmanager "ndk;30.0.16248370"`).
+- Rust through rustup. `rust/rust-toolchain.toml` pins the version and the Android targets, so rustup installs them on the first build.
+- cargo-ndk: `cargo install cargo-ndk --locked`.
+
 The Gradle wrapper downloads Gradle itself. On Windows, use `gradlew.bat` (or `./gradlew` from Git Bash).
 
 ## Commands
@@ -18,12 +22,22 @@ The Gradle wrapper downloads Gradle itself. On Windows, use `gradlew.bat` (or `.
 | Android Lint | `./gradlew lint` |
 | Unit tests | `./gradlew test` |
 | Debug APK | `./gradlew assembleDebug` (output: `app/build/outputs/apk/debug/app-debug.apk`) |
+| Rust format, Clippy, tests | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked` (run in `rust/`) |
 
-CI runs the same four checks in this order on every push to `main` and every pull request (`.github/workflows/ci.yml`).
+CI runs the Rust checks, then the same four Gradle checks in this order on every push to `main` and every pull request (`.github/workflows/ci.yml`).
 
 Formatting uses ktlint through Spotless and covers `*.kt` and `*.kts`. Rules live in `.editorconfig`. ktlint keeps `.editorconfig` cached in the Gradle daemon, so run `./gradlew --stop` after changing it.
 
 Android Lint treats warnings as errors. Checks that only report newer upstream versions are disabled.
+
+## Rust core
+
+The app runs a local shell through `rust/tasty-mobile-core`, which wraps the desktop app's `tasty-terminal` crate (PTY and terminal emulation) and exposes it to Kotlin with UniFFI. `tasty-terminal` is a git dependency pinned to a commit of github.com/zilhak/tasty; bump `rev` in `rust/Cargo.toml` on purpose.
+
+Gradle builds it as part of the app:
+
+- `cargoNdkBuild` builds `libtasty_mobile_core.so` in release mode for `arm64-v8a` and `x86_64`. Pass `-Ptasty.rustAbis=x86_64` to build one ABI while working on an emulator.
+- `uniffiBindgen` generates the Kotlin bindings (package `dev.tasty.android.core`) into `app/build/generated/source/uniffi`.
 
 ## Run on an emulator
 

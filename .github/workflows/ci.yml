@@ -28,7 +28,25 @@ jobs:
       - name: Install Android SDK packages
         run: |
           (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0" "ndk;30.0.16248370"
+
+      # rust/rust-toolchain.toml pins the toolchain and Android targets; rustup installs them on first use.
+      - name: Install Rust toolchain and cargo-ndk
+        working-directory: rust
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Rust format, Clippy and tests
+        working-directory: rust
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
 
       # Caches Gradle state and checks the wrapper jar checksum.
       - uses: gradle/actions/setup-gradle@v6

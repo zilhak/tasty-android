@@ -1,3 +1,19 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -7,6 +23,7 @@ android {
     namespace = "dev.tasty.android"
     compileSdk = 37
     buildToolsVersion = "37.0.0"
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         applicationId = "dev.tasty.android"
@@ -41,13 +58,138 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Rust core (rust/tasty-mobile-core): cargo-ndk builds the shared library for each ABI and
+// uniffi-bindgen generates the Kotlin bindings from it. Rust is always built in release mode
+// because a debug build of the terminal is too slow to use.
+
+/** Builds the Rust core for Android with cargo-ndk. */
+abstract class CargoNdkBuild : DefaultTask() {
+    @get:Inject abstract val exec: ExecOperations
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sources: ConfigurableFileCollection
+
+    @get:Internal abstract val rustDir: DirectoryProperty
+
+    @get:Internal abstract val ndkDir: DirectoryProperty
+
+    @get:Input abstract val abis: ListProperty<String>
+
+    @get:Input abstract val minSdk: org.gradle.api.provider.Property<Int>
+
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun build() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        exec.exec {
+            workingDir = rustDir.get().asFile
+            environment("ANDROID_NDK_HOME", ndkDir.get().asFile.absolutePath)
+            val targets = abis.get().flatMap { listOf("-t", it) }
+            commandLine(
+                listOf("cargo", "ndk") + targets +
+                    listOf("-P", minSdk.get().toString(), "-o", out.absolutePath) +
+                    listOf("build", "--release", "--locked", "-p", "tasty-mobile-core"),
+            )
+        }
+    }
+}
+
+/** Generates the Kotlin bindings from a built library with the workspace's uniffi-bindgen. */
+abstract class UniffiBindgen : DefaultTask() {
+    @get:Inject abstract val exec: ExecOperations
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val library: RegularFileProperty
+
+    @get:Internal abstract val rustDir: DirectoryProperty
+
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        exec.exec {
+            workingDir = rustDir.get().asFile
+            commandLine(
+                "cargo",
+                "run",
+                "--release",
+                "--locked",
+                "-q",
+                "-p",
+                "uniffi-bindgen",
+                "--",
+                "generate",
+                "--library",
+                library.get().asFile.absolutePath,
+                "--language",
+                "kotlin",
+                "--no-format",
+                "--out-dir",
+                out.absolutePath,
+            )
+        }
+    }
+}
+
+val rustWorkspace = rootProject.layout.projectDirectory.dir("rust")
+// Pass -Ptasty.rustAbis=x86_64 to build a single ABI while iterating on an emulator.
+val rustAbis =
+    providers
+        .gradleProperty("tasty.rustAbis")
+        .map { it.split(',').map(String::trim).filter(String::isNotEmpty) }
+        .orElse(listOf("arm64-v8a", "x86_64"))
+
+val cargoNdkBuild =
+    tasks.register<CargoNdkBuild>("cargoNdkBuild") {
+        sources.from(
+            fileTree(rustWorkspace) {
+                include("Cargo.toml", "Cargo.lock", "*/Cargo.toml", "*/src/**", "*/uniffi.toml")
+            },
+        )
+        rustDir.set(rustWorkspace)
+        ndkDir.set(androidComponents.sdkComponents.ndkDirectory)
+        abis.set(rustAbis)
+        minSdk.set(29)
+        outputDir.set(layout.buildDirectory.dir("rust/jniLibs"))
+    }
+
+val uniffiBindgen =
+    tasks.register<UniffiBindgen>("uniffiBindgen") {
+        library.set(
+            cargoNdkBuild.flatMap { build ->
+                build.outputDir.zip(build.abis) { dir, abis -> dir.file("${abis.first()}/libtasty_mobile_core.so") }
+            },
+        )
+        rustDir.set(rustWorkspace)
+        outputDir.set(layout.buildDirectory.dir("generated/source/uniffi"))
+    }
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoNdkBuild, CargoNdkBuild::outputDir)
+        variant.sources.kotlin?.addGeneratedSourceDirectory(uniffiBindgen, UniffiBindgen::outputDir)
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    // UniFFI's Kotlin bindings load the Rust library through JNA.
+    implementation(libs.jna) {
+        artifact { type = "aar" }
+    }
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

@@ -8,6 +8,9 @@
 build/
 .kotlin/
 
+# Rust
+rust/target/
+
 # Android
 local.properties
 captures/

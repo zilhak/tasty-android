@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">Tasty</string>
+  <string name="terminal_exited">Shell exited. Tap to start a new one.</string>
+  <string name="terminal_start_failed">Could not start the shell: %1$s</string>
 </resources>
