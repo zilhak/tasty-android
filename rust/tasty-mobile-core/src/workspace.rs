@@ -122,9 +122,17 @@ struct Workspace {
     name: String,
     layout: Tree<Pane>,
     focused_pane: u64,
+    /// Tabs made in this workspace so far. Numbers new tabs, so a tab keeps its number when
+    /// others move or close.
+    created_tabs: u64,
 }
 
 impl Workspace {
+    fn next_tab_number(&mut self) -> u64 {
+        self.created_tabs += 1;
+        self.created_tabs
+    }
+
     fn pane_mut(&mut self, pane_id: u64) -> Option<&mut Pane> {
         self.layout.find(&|p: &Pane| p.id == pane_id)
     }
@@ -186,7 +194,8 @@ impl WorkspaceStore {
     /// Adds a tab with one surface to a pane, selects it and returns the surface id.
     pub fn new_tab(&self, pane_id: u64) -> Option<u64> {
         let mut state = self.lock();
-        let tab = state.new_tab();
+        let number = state.active_workspace_mut().next_tab_number();
+        let tab = state.new_tab(number);
         let (tab_id, surface_id) = (tab.id, tab.focused_surface);
         let workspace = state.active_workspace_mut();
         let pane = workspace.pane_mut(pane_id)?;
@@ -256,7 +265,8 @@ impl WorkspaceStore {
     /// Splits a pane. The new pane gets one tab and the focus. Returns the new pane's id.
     pub fn split_pane(&self, pane_id: u64, orientation: SplitOrientation) -> Option<u64> {
         let mut state = self.lock();
-        let (split_id, pane) = (state.take_id(), state.new_pane());
+        let number = state.active_workspace_mut().next_tab_number();
+        let (split_id, pane) = (state.take_id(), state.new_pane(number));
         let new_pane_id = pane.id;
         let workspace = state.active_workspace_mut();
         if !workspace.layout.split(pane_id, split_id, orientation, pane) {
@@ -375,20 +385,20 @@ impl State {
         id
     }
 
-    fn new_tab(&mut self) -> Tab {
+    fn new_tab(&mut self, number: u64) -> Tab {
         let (tab_id, surface_id) = (self.take_id(), self.take_id());
         Tab {
             id: tab_id,
-            title: "Terminal".to_owned(),
+            title: format!("Terminal {number}"),
             custom_title: None,
             layout: Tree::Leaf(Surface { id: surface_id }),
             focused_surface: surface_id,
         }
     }
 
-    fn new_pane(&mut self) -> Pane {
+    fn new_pane(&mut self, number: u64) -> Pane {
         let pane_id = self.take_id();
-        let tab = self.new_tab();
+        let tab = self.new_tab(number);
         Pane {
             id: pane_id,
             active_tab: tab.id,
@@ -398,12 +408,13 @@ impl State {
 
     fn add_workspace(&mut self) -> u64 {
         let id = self.take_id();
-        let pane = self.new_pane();
+        let pane = self.new_pane(1);
         self.created_workspaces += 1;
         self.workspaces.push(Workspace {
             id,
             name: format!("Workspace {}", self.created_workspaces),
             focused_pane: pane.id,
+            created_tabs: 1,
             layout: Tree::Leaf(pane),
         });
         self.active = id;
@@ -607,6 +618,28 @@ mod tests {
         assert_eq!(tab.nodes, vec![SurfaceNode::Surface { id: tab.root }]);
         assert_eq!(tab.focused_surface, tab.root);
         assert_eq!(snap.surfaces, vec![tab.root]);
+    }
+
+    #[test]
+    fn tabs_keep_their_number_when_others_move_or_close() {
+        let store = WorkspaceStore::create();
+        let pane = store.snapshot().layout.focused_pane;
+        store.new_tab(pane);
+        store.new_tab(pane);
+        let titles = |s: &WorkspaceStore| -> Vec<String> {
+            panes(&s.snapshot())[0]
+                .1
+                .iter()
+                .map(|t| t.title.clone())
+                .collect()
+        };
+        assert_eq!(titles(&store), ["Terminal 1", "Terminal 2", "Terminal 3"]);
+        let first = first_tab(&store).id;
+        store.move_tab(first, 2);
+        assert_eq!(titles(&store), ["Terminal 2", "Terminal 3", "Terminal 1"]);
+        store.close_tab(first);
+        store.new_tab(pane);
+        assert_eq!(titles(&store), ["Terminal 2", "Terminal 3", "Terminal 4"]);
     }
 
     #[test]
