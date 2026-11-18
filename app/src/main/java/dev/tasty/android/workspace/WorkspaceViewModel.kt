@@ -50,6 +50,18 @@ class WorkspaceViewModel(
 
     fun closeTab(tabId: Long) = update { store.closeTab(tabId.toULong()) }
 
+    /** Names a tab; a blank name brings back the shell's title. */
+    fun renameTab(
+        tabId: Long,
+        title: String,
+    ) = update { store.renameTab(tabId.toULong(), title) }
+
+    /** Moves a tab by [offset] places within its pane. */
+    fun moveTab(
+        tabId: Long,
+        offset: Int,
+    ) = update { store.moveTab(tabId.toULong(), offset) }
+
     fun splitPane(
         paneId: Long,
         orientation: SplitOrientation,

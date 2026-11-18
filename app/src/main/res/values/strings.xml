@@ -15,4 +15,6 @@
   <string name="surface_close">Close surface</string>
   <string name="tab_new">New tab</string>
   <string name="tab_close">Close tab</string>
+  <string name="tab_move_left">Move left</string>
+  <string name="tab_move_right">Move right</string>
 </resources>
