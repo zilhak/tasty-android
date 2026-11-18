@@ -37,12 +37,27 @@ object TastyTokens {
     val textMuted = Color(0xFFA6ADC8)
     val textDisabled = Color(0xFF7F849C)
     val accentPrimary = Color(0xFF89B4FA)
+    val inputBg = Color(0xFF313244)
+    val inputFg = Color(0xFFCDD6F4)
+    val inputBorder = Color(0xFF6C7086)
+    val inputBorderFocus = Color(0xFF89B4FA)
+    val inputPlaceholder = Color(0xFFA6ADC8)
+    val selectionBg = Color(0xFF585B70)
+    val buttonPrimaryBg = Color(0xFF89B4FA)
+    val buttonPrimaryFg = Color(0xFF11111B)
+    val stateDisabledFill = Color(0xFF313244)
+    val stateDisabledFg = Color(0xFF7F849C)
+    val stateDisabledBorder = Color(0xFF313244)
+    val borderFocus = Color(0xFF89B4FA)
 
     // Shape and type.
     val borderWidth = 1.dp
     val radius = 4.dp
     val radiusSm = 2.dp
     val spaceSm = 8.dp
+    val inputPaddingX = 12.dp
+    val inputRadius = 4.dp
+    val focusRingWidth = 2.dp
     val iconSizeMd = 16.dp
     val fontSizeCaption = 11.sp
     val fontSizeBody = 13.sp

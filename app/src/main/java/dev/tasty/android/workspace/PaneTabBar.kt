@@ -245,6 +245,10 @@ internal class MenuLabels(
     val splitSurfaceRight: String,
     val splitSurfaceDown: String,
     val closeSurface: String,
+    val renameTab: String,
+    val rename: String,
+    val cancel: String,
+    val tabName: String,
     val moveLeft: String,
     val moveRight: String,
     val closeTab: String,
@@ -264,6 +268,10 @@ internal class MenuLabels(
                     splitSurfaceRight = res.getString(R.string.surface_split_right),
                     splitSurfaceDown = res.getString(R.string.surface_split_down),
                     closeSurface = res.getString(R.string.surface_close),
+                    renameTab = res.getString(R.string.tab_rename),
+                    rename = res.getString(R.string.rename),
+                    cancel = res.getString(R.string.cancel),
+                    tabName = res.getString(R.string.tab_name),
                     moveLeft = res.getString(R.string.tab_move_left),
                     moveRight = res.getString(R.string.tab_move_right),
                     closeTab = res.getString(R.string.tab_close),
@@ -273,7 +281,10 @@ internal class MenuLabels(
     }
 }
 
-/** The menu a long press on a tab opens. Moves past either end stay listed, disabled. */
+/**
+ * The menu a long press on a tab opens. Rename opens an input popup; moves past either end stay
+ * listed, disabled.
+ */
 private fun tabMenu(
     context: WorkspaceContext,
     pane: PaneNode.Pane,
@@ -283,10 +294,19 @@ private fun tabMenu(
     val labels = context.labels
     val model = context.model
     val id = tab.id.toLong()
-    return Popup(
-        title = tabTitle(tab, context.statuses),
+    val title = tabTitle(tab, context.statuses)
+    val rename =
+        Popup.Input(
+            title = labels.renameTab,
+            initial = title,
+            placeholder = labels.tabName,
+            confirmLabel = labels.rename,
+        ) { model.renameTab(id, it) }
+    return Popup.Menu(
+        title = title,
         items =
             listOf(
+                PopupItem.Action(labels.renameTab) { context.openPopup(rename) },
                 PopupItem.Action(labels.moveLeft, enabled = index > 0) { model.moveTab(id, -1) },
                 PopupItem.Action(labels.moveRight, enabled = index < pane.tabs.lastIndex) { model.moveTab(id, 1) },
                 PopupItem.Action(labels.closeTab, rule = true) { model.closeTab(id) },
@@ -340,5 +360,5 @@ private fun tastyMenu(
     }
     val workspaceId = snapshot.activeWorkspace.toLong()
     items += PopupItem.Action(labels.closeWorkspace, rule = true) { model.closeWorkspace(workspaceId) }
-    return Popup(title, items)
+    return Popup.Menu(title, items)
 }

@@ -84,6 +84,26 @@ fun ListPopup(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    PopupFrame(title, onDismiss, modifier) { room ->
+        val listRoom = room - T.androidPopupTitleHeight - T.borderWidth * 2
+        val fitting = (listRoom / T.androidPopupRowHeight).toInt()
+        val rows = fitting.coerceIn(1, items.size.coerceAtLeast(1))
+        PopupList(items, rows, onDismiss)
+    }
+}
+
+/**
+ * The frame every Android popup shares: a scrim over the area it is placed in, and in its middle a
+ * panel with a title row. [content] goes under the title and gets the height the panel may take.
+ * Tapping the scrim or going back calls [onDismiss].
+ */
+@Composable
+internal fun PopupFrame(
+    title: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (room: Dp) -> Unit,
+) {
     BackHandler(onBack = onDismiss)
     BoxWithConstraints(
         modifier
@@ -93,9 +113,7 @@ fun ListPopup(
             .padding(T.androidPopupMargin),
         contentAlignment = Alignment.Center,
     ) {
-        val listRoom = maxHeight - T.androidPopupTitleHeight - T.borderWidth * 2
-        val fitting = (listRoom / T.androidPopupRowHeight).toInt()
-        val rows = fitting.coerceIn(1, items.size.coerceAtLeast(1))
+        val room = maxHeight
         Column(
             Modifier
                 .width(min(maxWidth, T.androidPopupMaxWidth))
@@ -107,7 +125,7 @@ fun ListPopup(
                 .clickable(interactionSource = null, indication = null, onClick = {}),
         ) {
             PopupTitle(title)
-            PopupList(items, rows, onDismiss)
+            content(room)
         }
     }
 }

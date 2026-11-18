@@ -43,6 +43,7 @@ import dev.tasty.android.core.SurfaceNode
 import dev.tasty.android.core.TabInfo
 import dev.tasty.android.terminal.TerminalStatus
 import dev.tasty.android.terminal.TerminalView
+import dev.tasty.android.ui.InputPopup
 import dev.tasty.android.ui.ListPopup
 import dev.tasty.android.ui.PopupItem
 import dev.tasty.android.ui.TastyTokens
@@ -64,7 +65,7 @@ fun WorkspaceScreen(
     val statuses by model.statuses.collectAsStateWithLifecycle()
     var popup by remember { mutableStateOf<Popup?>(null) }
     val labels = MenuLabels.load()
-    val context = WorkspaceContext(snapshot, statuses, model, labels) { popup = it }
+    val context = WorkspaceContext(snapshot, statuses, model, labels, popupOpen = popup != null) { popup = it }
     Surface(modifier = modifier.fillMaxSize(), color = TastyTokens.bgApp) {
         Box(
             Modifier
@@ -76,16 +77,46 @@ fun WorkspaceScreen(
             key(snapshot.layout.workspaceId) {
                 PaneTree(snapshot.layout.root.toLong(), context)
             }
-            popup?.let { ListPopup(it.title, it.items, onDismiss = { popup = null }) }
+            when (val open = popup) {
+                is Popup.Menu -> {
+                    ListPopup(open.title, open.items, onDismiss = { popup = null })
+                }
+
+                is Popup.Input -> {
+                    InputPopup(
+                        title = open.title,
+                        initial = open.initial,
+                        placeholder = open.placeholder,
+                        confirmLabel = open.confirmLabel,
+                        cancelLabel = labels.cancel,
+                        onConfirm = open.onConfirm,
+                        onDismiss = { popup = null },
+                    )
+                }
+
+                null -> {
+                    Unit
+                }
+            }
         }
     }
 }
 
-/** A menu to show in a [ListPopup]. */
-internal class Popup(
-    val title: String,
-    val items: List<PopupItem>,
-)
+/** A popup over the screen: a menu ([ListPopup]) or a short text entry ([InputPopup]). */
+internal sealed interface Popup {
+    class Menu(
+        val title: String,
+        val items: List<PopupItem>,
+    ) : Popup
+
+    class Input(
+        val title: String,
+        val initial: String,
+        val placeholder: String,
+        val confirmLabel: String,
+        val onConfirm: (String) -> Unit,
+    ) : Popup
+}
 
 /** What every part of the screen reads, passed down the tree as one value. */
 internal class WorkspaceContext(
@@ -93,6 +124,8 @@ internal class WorkspaceContext(
     val statuses: Map<Long, TerminalStatus>,
     val model: WorkspaceViewModel,
     val labels: MenuLabels,
+    /** While a popup is open the terminal leaves the focus to it. */
+    val popupOpen: Boolean,
     val openPopup: (Popup) -> Unit,
 ) {
     val panes = snapshot.layout.nodes.associateBy { it.nodeId() }
@@ -214,6 +247,8 @@ private fun SurfaceView(
                 update = { view ->
                     view.onTap = { if (!focused) model.focusSurface(surfaceId) }
                     view.active = focused
+                    // Take the focus back once a popup that held it closes.
+                    if (focused && !scope.context.popupOpen && !view.hasFocus()) view.requestFocus()
                 },
                 modifier = Modifier.fillMaxSize().padding(1.dp),
             )
