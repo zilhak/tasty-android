@@ -28,6 +28,8 @@ pub enum SurfaceNode {
 pub struct TabInfo {
     pub id: u64,
     pub title: String,
+    /// A name the user gave the tab. When set it is shown instead of the shell's title.
+    pub custom_title: Option<String>,
     pub root: u64,
     pub nodes: Vec<SurfaceNode>,
     pub focused_surface: u64,
@@ -90,6 +92,7 @@ impl Leaf for Surface {
 struct Tab {
     id: u64,
     title: String,
+    custom_title: Option<String>,
     layout: Tree<Surface>,
     focused_surface: u64,
 }
@@ -203,6 +206,44 @@ impl WorkspaceStore {
         pane.active_tab = tab_id;
         let pane_id = pane.id;
         workspace.focused_pane = pane_id;
+        true
+    }
+
+    /// Names a tab. A name that is empty after trimming clears it, so the shell's title shows again.
+    pub fn rename_tab(&self, tab_id: u64, title: String) -> bool {
+        let mut state = self.lock();
+        let workspace = state.active_workspace_mut();
+        let Some(pane) = workspace.pane_with_tab(tab_id) else {
+            return false;
+        };
+        let Some(tab) = pane.tabs.iter_mut().find(|t| t.id == tab_id) else {
+            return false;
+        };
+        let title = title.trim();
+        tab.custom_title = (!title.is_empty()).then(|| title.to_owned());
+        true
+    }
+
+    /// Moves a tab by `offset` places within its pane. Returns false when the tab is not found
+    /// or the move would leave the pane's tab row.
+    pub fn move_tab(&self, tab_id: u64, offset: i32) -> bool {
+        let mut state = self.lock();
+        let workspace = state.active_workspace_mut();
+        let Some(pane) = workspace.pane_with_tab(tab_id) else {
+            return false;
+        };
+        let Some(from) = pane.tabs.iter().position(|t| t.id == tab_id) else {
+            return false;
+        };
+        let to = i64::try_from(from).unwrap_or(i64::MAX) + i64::from(offset);
+        let Ok(to) = usize::try_from(to) else {
+            return false;
+        };
+        if offset == 0 || to >= pane.tabs.len() {
+            return false;
+        }
+        let tab = pane.tabs.remove(from);
+        pane.tabs.insert(to, tab);
         true
     }
 
@@ -339,6 +380,7 @@ impl State {
         Tab {
             id: tab_id,
             title: "Terminal".to_owned(),
+            custom_title: None,
             layout: Tree::Leaf(Surface { id: surface_id }),
             focused_surface: surface_id,
         }
@@ -522,6 +564,7 @@ fn tab_info(tab: &Tab) -> TabInfo {
     TabInfo {
         id: tab.id,
         title: tab.title.clone(),
+        custom_title: tab.custom_title.clone(),
         root: tab.layout.node_id(),
         nodes,
         focused_surface: tab.focused_surface,
@@ -564,6 +607,35 @@ mod tests {
         assert_eq!(tab.nodes, vec![SurfaceNode::Surface { id: tab.root }]);
         assert_eq!(tab.focused_surface, tab.root);
         assert_eq!(snap.surfaces, vec![tab.root]);
+    }
+
+    #[test]
+    fn renaming_a_tab_sets_and_clears_its_custom_title() {
+        let store = WorkspaceStore::create();
+        let tab = first_tab(&store).id;
+        assert!(store.rename_tab(tab, "  build  ".to_owned()));
+        assert_eq!(first_tab(&store).custom_title.as_deref(), Some("build"));
+        assert!(store.rename_tab(tab, "   ".to_owned()));
+        assert_eq!(first_tab(&store).custom_title, None);
+        assert!(!store.rename_tab(9999, "x".to_owned()));
+    }
+
+    #[test]
+    fn moving_a_tab_reorders_it_within_its_pane_and_stops_at_the_ends() {
+        let store = WorkspaceStore::create();
+        let pane = store.snapshot().layout.focused_pane;
+        store.new_tab(pane);
+        store.new_tab(pane);
+        let ids = |s: &WorkspaceStore| -> Vec<u64> {
+            panes(&s.snapshot())[0].1.iter().map(|t| t.id).collect()
+        };
+        let [a, b, c] = ids(&store)[..] else { panic!() };
+        assert!(!store.move_tab(a, -1));
+        assert!(!store.move_tab(c, 1));
+        assert!(store.move_tab(a, 1));
+        assert_eq!(ids(&store), vec![b, a, c]);
+        assert!(store.move_tab(c, -2));
+        assert_eq!(ids(&store), vec![c, b, a]);
     }
 
     #[test]
