@@ -73,7 +73,7 @@
 - `tasty-net-ffi`는 tasty-network 레포에 둔다. 앱은 자기 cdylib `tasty-mobile-core`에 그 크레이트를 rlib으로 링크해 ABI별 `.so` 하나로 싣는다.
 - Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. tasty-network는 Gradle, AAR 묶기, 앱 서명을 갖지 않는다(진행 중 초안 "바인딩 층").
 - UniFFI 판은 tasty-network가 고정하는 최신 안정판이다. 앱은 0.32에서 그 판으로 올린다.
-- Android용 태그가 나오기 전에는 git 의존 `rev = "b103e9073b9e0e33ac5f586d8cb3b3825f54fa1b"` 고정으로 시작한다. 태그로 올리는 시점은 tasty 전환과 같은 태그다.
+- Android용 태그가 나오기 전에는 git 의존 `rev = "130c5d46a59e7fb05b598ae2eb5ff5c77fda0005"`(tasty-network develop `130c5d4`) 고정으로 시작한다. 태그로 올리는 시점은 tasty 전환과 같은 태그다.
 
 ### 제안
 
@@ -347,7 +347,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 |---|---|---|
 | ① 원격 빌드 칸 | Android 빌드와 에뮬레이터 시험을 도는 원격 Windows 빌드 칸 | 없음 |
 | ①′ 터미널 브랜치 반영 | `work/android-terminal`을 develop 위로 올리고 CI 4단계와 Rust 검사를 돌려 반영한다 | ①, U1 |
-| ② Rust 연결 기반 | tasty-network develop rev 고정(`b103e90`). 앱 cdylib의 임시 export(3절)로 `noBackupFilesDir/net/` 아래 최종 키 폴더(5.4)에 기기 키를 만들고 읽고 기기 ID를 돌려준다. 두 ABI `.so`와 생성 Kotlin | ①′, 이 계획의 검증. b103e90의 transport는 시스템 ssh 크레이트에 늘 의존하므로 이 단계는 identity만 의존한다. 이미 있는 증거(b103e90 크레이트의 `aarch64-linux-android` `cargo check`)와 이 단계가 새로 내야 할 증거(두 ABI에서 API 29로 앱 링크, 기기·에뮬레이터 위 실행)를 나눈다 |
+| ② Rust 연결 기반 | tasty-network develop rev 고정(`130c5d4`). 앱 cdylib의 임시 export(3절)로 `noBackupFilesDir/net/` 아래 최종 키 폴더(5.4)에 기기 키를 만들고 읽고 기기 ID를 돌려준다. 두 ABI `.so`와 생성 Kotlin | ①′, 이 계획의 검증. b103e90의 transport는 시스템 ssh 크레이트에 늘 의존하므로 이 단계는 identity만 의존한다. 이미 있는 증거(b103e90 크레이트의 `aarch64-linux-android` `cargo check`)와 이 단계가 새로 내야 할 증거(두 ABI에서 API 29로 앱 링크, 기기·에뮬레이터 위 실행)를 나눈다 |
 | ③ ffi로 교체 | `tasty-net-ffi`가 생기면 그것을 rlib으로 링크하고 ②의 임시 export를 지운다. ②와 같은 키 폴더를 넘겨 기기 ID를 유지한다. UniFFI 판을 맞추고 scaffolding 재노출(2절)을 붙인다 | tasty-network: transport ssh feature 분리, 내장 SSH(exec·SFTP), ssh-config 이식, ffi 크레이트, UniFFI 판 고정. 진행 중 초안의 ffi 의존에는 `tasty-net-p2p`가 들어 있으므로, 그 구성이 유지되면 p2p 크레이트의 반영도 선행이다 |
 | ④ SSH 프로필 + exec + SFTP 읽기 | 5.1~5.3. 프로필 파일·키 생성과 가져오기, Git 정보, Explorer 읽기. 앱 수명 이벤트 연결(`AppEvent`), 백그라운드 정리(5.7), LAN 권한 경로(5.5)를 함께 만든다 | ③, #1·#2·#3·#4·#6·#13·#14. 화면 범위는 Git 정보 범위(기획 3.2)·뷰어(기획 3.3)의 사용자 결정 |
 | ⑤-1 원격 Tasty 목록·상태 | 5.4 1단계. 링크·요청 채널의 백그라운드 정리(5.7)를 함께 만든다 | 모델·호출부 개발: ④, #7·#7b(R3 답의 응답 모양으로 시작, 어느 tasty 반영도 기다리지 않는다). 실제 목록 연동: tasty R3 (A) `workspace.overview` 반영, v2 레코드 게시, tasty 전환과 같은 tasty-network 태그 |
@@ -355,6 +355,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 | ⑥ 연결 상태 | 5.7. 두 층 상태 화면(앱 수명 이벤트 연결과 백그라운드 정리는 ④·⑤에서 이미 만든다) | 화면 개발: ③, #6b·#8. 통합 검증(두 층을 실제로 모아 확인): ④(일반 SSH 세션), ⑤-1(Tasty 요청 연결) |
 
 - ④~⑥의 구현 TODO는 각 선행이 풀릴 때 이 표를 기준으로 만든다.
+- ②의 남은 일(기기 키 게시): `130c5d4`의 `tasty-net-identity` `DeviceKey::load_or_create`는 키 파일을 `std::fs::hard_link`로 게시한다(`crates/tasty-net-identity/src/device_key.rs`@130c5d4). Android 앱 데이터 폴더(SELinux 유형 `app_data_file`)에서는 SELinux가 이 link를 거절한다(에뮬레이터 API 37에서 `avc: denied { link }`, 기기 위 시험 2회 모두 실패). tasty-network에 hard link를 쓰지 않는 원자 게시를 요청했다(앱 `minSdk = 29`의 API 29에서도 동작하는 방식). 그 변경이 들어간 새 rev를 받으면 앱은 rev만 올려 같은 시험을 다시 돌린다.
 - 기본 상태 표시(연결 중·끊김)는 ④·⑤에서 각 화면이 먼저 갖고, ⑥이 두 층을 모은 상태 화면을 만든다.
 
 ## 9. iOS
