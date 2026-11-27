@@ -176,6 +176,7 @@
 - 1단계는 읽기만 한다: 목록(이름·종류·크기·mtime·권한), 링크 대상 읽기(진행 중 설계는 목록 `read_dir`와 링크 대상 `read_link`를 따로 둔다), `stat`·`lstat`, `realpath`, 범위 읽기(offset·len). 실패 사유를 권한 없음·없음으로 나눠 받는다(#4).
 - subsystem 실패: SSH의 subsystem 요청 실패 응답은 서버가 SFTP를 껐는지까지 알려 주지 않는다(RFC 4254 6.5). 그래서 "SFTP 꺼짐"이라고 단정할 근거가 있는 경우와 "서버가 SFTP 요청을 거절함(사유 모름)"을 나눠 보인다.
 - 세션 공유(#6): 진행 중 설계는 용도(터널·포트 발견·exec·SFTP)마다 config를 해석하고, 해석 결과의 연결 값 묶음(세션 키)이 같을 때만 세션 하나를 나눠 쓴다. `Match command`·`Match sessiontype`으로 용도마다 대상이나 키가 달라지면 같은 Host 별명이라도 세션이 둘이다. 세션은 그 위 핸들(터널·exec·SFTP)이 하나라도 살아 있는 동안 유지되고 마지막 핸들이 닫히면 닫힌다. 앱은 같은 Host의 Explorer와 Git 화면이 대개 한 세션을 쓴다고 기대하되, 화면 수명과 핸들 수명을 맞춰 쓰지 않는 핸들을 닫는다.
+- 경로 문법: Explorer의 경로 잇기와 부모 구하기는 원격 Tasty가 descriptor에 알리는 `path_syntax`(`Posix`·`Windows`, 5.4)를 따른다. 경로 모양(드라이브 문자, 구분자)으로 원격 OS를 추정하지 않는다.
 
 결정 대기: 쓰기(쓰기·이름 바꾸기·삭제, #5)는 기획 초안 4.4(편집 범위, 사용자 몫)가 정해진 뒤.
 
@@ -194,6 +195,8 @@
 - 메서드와 응답은 tasty가 정한다(R3). 요청 채널은 운반만 한다(`transport.md` "요청 채널"@b103e90).
 - 1단계 메서드(R3 A): 읽기 전용 원자 메서드 `workspace.overview`. 응답 모양은 워크스페이스마다 `{id, name, subtitle, busy_count, mirror, ws_holder?, surfaces: [{id, kind, title, busy, holder?, granted_seq?}]}`와 capabilities다. 단일 서피스 점유는 `attach.list`의 `attached[]{surface_id, holder, granted_seq}`에 이미 있다. 크레이트 이름·sha를 받기 전에도 이 모양으로 Kotlin 모델을 가정해도 된다.
 - 도메인 타입(R3 B): attach 도메인 메시지와 descriptor의 serde 타입만 담은 tasty 크레이트. Android에서 빌드할 수 있다. 기존 크레이트를 쓰지 않고 새로 만드는 근거(tasty `a8c4d26f4d` 기준): 지금 그 타입이 있는 `tasty-ipc`는 rusqlite bundled·memory·telemetry·agent 의존을 함께 끌고 오고, `tasty-remote`는 ssh 전제다. 2단계(화면 attach)가 이 크레이트를 쓴다.
+- 경로 문법(R3 B): 원격 Tasty는 descriptor에 `path_syntax`(`Posix`·`Windows`)를 알린다. 앱은 원격 경로를 잇거나 부모를 구할 때 이 값을 쓰고, 경로 모양으로 OS를 추정하지 않는다.
+- 미지원 메서드 코드: 원격 Tasty가 모르는 메서드에는 JSON-RPC 오류 코드 `-32601`(method not found)로 답한다. tasty는 이 값을 R3 (B) 크레이트의 공개 상수 `METHOD_NOT_FOUND`로 둔다(값은 바뀌지 않는다).
 
 제안:
 
@@ -202,7 +205,7 @@
 - `PeerKeyStore` 구현: `net/peers/` 아래 상대마다 파일 하나. 저장 키(`PeerRef`)는 편집할 수 있는 Host 별명이 아니라 앱이 프로필마다 붙이는 바뀌지 않는 ID다(별명을 바꿔도 기록이 빠지지 않게). `pin_if_absent`는 기기 키 코드(`crates/tasty-net-identity/src/device_key.rs`@b103e90)와 같은 방식으로, 내용을 다 쓴 임시 파일을 `hard_link`로 게시한다. 경쟁에서 진 호출은 이미 확정된 ID를 읽어 `Existing`으로 돌려준다. 그래서 같은 상대에게 겹친 첫 연결에서도 `Inserted`는 하나다.
 - 키 바뀜 화면: 연결 상태 요약(`ConnectionTable`의 마지막 원인)이 아니라 연결 시도가 돌려준 구조화된 오류(`PeerKeyMismatch { expected, got }`)에서 두 키를 받아 보여 주고, 사용자가 확인하면 `reregister`를 부른다. b103e90의 연결 목록 요약은 이 오류를 문자열로 줄이므로 화면 근거로 쓰지 않는다(`connection_table/info.rs`@b103e90). 전환 전 Tasty 판정(`PortOnlyDiscovery`·`V1Ack`)도 같은 시도 오류에서 읽는다.
 - 요청 채널: transport의 `dial_request`는 이미 `RequestClient`를 돌려준다(`handshake.rs`·`request.rs`@b103e90). 요청 ID, 응답 연결, 시간 제한, 채널 닫기를 그 객체가 맡으므로, 1단계는 ffi가 `RequestClient`를 감싸 주고 앱은 `workspace.overview`를 부르기만 한다(#7). 1단계는 attach 링크나 descriptor에 기대지 않는다. 소유: `RequestClient` 핸들은 Kotlin의 원격 Tasty 저장소 객체 하나가 갖고 닫는다. 호출 결과(JSON 바이트 또는 문자열)는 Kotlin이 해석하지 않고 `tasty-mobile-core`의 serde 해석 함수로 넘겨 UniFFI 레코드로 받는다. b103e90의 `dial_request`는 상대가 `net.request`를 광고했는지를 열기 조건으로 보지 않으므로, handshake 뒤 첫 호출 전에 상대 `caps`를 확인하는 일은 ffi가 그 값을 내주면 앱이 한다(#7 확인 항목).
-- 두 capability를 나눈다: handshake의 `net.request`(전송 계층 capability, `handshake.md` "capability"@b103e90)는 요청 채널을 열 수 있는지이고, `workspace.overview` 응답의 capabilities는 R3의 도메인 계약이다. 세 근거를 따로 다룬다: `net.request` 미광고는 "원격 Tasty가 요청 채널을 광고하지 않음"(구버전 판정은 `PortOnlyDiscovery`·`V1Ack`로만 한다), 원격 메서드 미지원과 응답의 도메인 capability 부족은 각각 "원격 Tasty가 이 기능을 지원하지 않음"의 다른 사유다. `RequestClient`는 원격이 돌려준 메서드 오류를 `RequestError::Remote`로 넘기고, R3 답에는 `workspace.overview` 미지원의 오류 코드가 없다. 그래서 메서드 미지원은 문자열 비교가 아니라 tasty가 정할 구조화된 오류 코드로 판정한다(R3 결정 대기).
+- 두 capability를 나눈다: handshake의 `net.request`(전송 계층 capability, `handshake.md` "capability"@b103e90)는 요청 채널을 열 수 있는지이고, `workspace.overview` 응답의 capabilities는 R3의 도메인 계약이다. 세 근거를 따로 다룬다: `net.request` 미광고는 "원격 Tasty가 요청 채널을 광고하지 않음"(구버전 판정은 `PortOnlyDiscovery`·`V1Ack`로만 한다), 원격 메서드 미지원과 응답의 도메인 capability 부족은 각각 "원격 Tasty가 이 기능을 지원하지 않음"의 다른 사유다. `RequestClient`는 원격이 돌려준 메서드 오류를 `RequestError::Remote(Value)`로 넘기고, 원격의 error 객체를 통째로 보존한다(`crates/tasty-net-transport/src/request.rs`의 `Remote` 변형, tasty-network develop `130c5d4`). 메서드 미지원은 문자열 비교가 아니라 그 객체의 `code`로 판정한다: `error.code`가 숫자 `-32601`(`METHOD_NOT_FOUND`)일 때만 미지원으로 본다. `code`에는 숫자도 문자열도 올 수 있으므로, 문자열 `"-32601"`이나 다른 값은 미지원이 아니라 일반 원격 오류로 다룬다. 미지원이면 시각적 피드백만 보인다(전제 5, 5.8).
 - 다시 읽는 조건: `workspace.overview`는 호출 시점의 원자 응답이고, 요청 채널은 호출마다 응답을 돌려줄 뿐 바뀜을 알리지 않는다. `ConnectionTable` 이벤트도 연결 전이만 알린다. 그래서 1단계는 첫 조회, 사용자의 새로고침, 재연결 뒤, 앱이 앞으로 돌아온 뒤에 다시 읽는다. 링크가 살아 있는 동안의 점유 바뀜을 자동으로 받는 일은 2단계(attach 도메인 메시지) 이후로 둔다.
 - 응답 크기: b103e90의 요청 채널은 직렬화된 응답을 프레임 하나(`MAX_FRAME_LEN`, 1 MiB)로 제한하고, 넘으면 `RequestError::ResponseTooLarge`(원격 응답 코드 `net.response_too_large`)를 돌려준다(`crates/tasty-net-transport/src/request.rs`@b103e90). `workspace.overview`는 워크스페이스와 서피스를 한 응답에 담으므로, 앱은 이 오류를 FFI에서 그대로 받아 "응답이 너무 큼"으로 보이고 빈 목록이나 기능 미지원으로 읽지 않는다. R3의 원자 응답 계약은 바꾸지 않는다.
 - 응답 해석: Kotlin에 JSON 해석 의존을 따로 들이지 않고 `tasty-mobile-core`의 serde 타입으로 해석한다. R3 답은 (B) 크레이트가 attach 도메인 메시지와 descriptor 타입을 담는다고 적고, `workspace.overview` 응답 타입까지 담는지는 적지 않았다. 그래서 우선 `tasty-mobile-core` 안에 R3 답의 응답 모양과 같은 serde 타입을 두고, (B)나 (A)의 반영이 그 응답 타입을 공개하면 그것으로 바꾼다.
@@ -210,7 +213,7 @@
 
 결정 대기:
 
-- tasty: R3 (A)·(B)의 반영과 크레이트 이름·sha, `workspace.overview` 미지원을 가리는 오류 코드, 전환한 Tasty의 v2 레코드 게시.
+- tasty: R3 (A)·(B)의 반영과 크레이트 이름·sha(`METHOD_NOT_FOUND`·`path_syntax`가 들어 있는 판), 전환한 Tasty의 v2 레코드 게시.
 - 사용자: 대화형 원격 SSH 터미널(기획 초안 4.2 "대화형 SSH 터미널을 넣는다" 행)은 U2가 정하지 않았다. 기획 초안 4.2의 열린 선택지로 남는다.
 
 ### 5.5 권한
@@ -273,7 +276,7 @@
 | 원격 Tasty가 없거나 실행 중이 아니다 | 5.4 | 포트 발견 실패(원격 인스턴스 없음·종료), 원격 리스너 없음 |
 | 원격 Tasty가 전환 전 판이다 | 5.4 | `PeerTooOld { evidence: PortOnlyDiscovery }` 또는 v1 거절 ACK(`evidence: V1Ack`) |
 | 원격 Tasty가 요청 채널을 광고하지 않는다 | 5.4 | handshake `caps`에 `net.request` 없음(구버전 판정과 별개) |
-| 원격 Tasty가 기능을 지원하지 않는다 | 5.4 | `RequestError::Remote`의 tasty가 정한 미지원 코드, `workspace.overview` capabilities에 값 없음 |
+| 원격 Tasty가 기능을 지원하지 않는다 | 5.4 | `RequestError::Remote(Value)`의 `error.code`가 숫자 `-32601`(`METHOD_NOT_FOUND`, 숫자일 때만), `workspace.overview` capabilities에 값 없음. 시각적 피드백만 보인다 |
 | 원격 목록이 너무 크다 | 5.4 | `RequestError::ResponseTooLarge`. "응답이 너무 큼"으로 보이고 빈 목록·미지원으로 읽지 않는다 |
 | 원격 Tasty 기기 키가 바뀌었다 | 5.4 | 연결 시도 오류 `HandshakeError::PeerKeyMismatch { expected, got }` |
 | LAN 권한을 거절했거나 회수됐다(연결 전) | 5.5 | 앱의 권한 요청·확인 결과. 소켓을 열기 전이라 차단 사유를 읽을 소켓이 없다 |
