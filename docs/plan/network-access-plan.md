@@ -25,7 +25,7 @@
 | U4 | 접속 프로필은 앱의 `ssh/config`(OpenSSH 형식, UI 편집과 붙여넣기 가져오기)이고, Tasty 전용 값은 앱 고유 파일에 둔다(A) | 같은 답 |
 | U5 | 연결은 앱이 앞에 있을 때만 유지한다(A)로 시작한다. 백그라운드 지속 연결을 실제로 제공하는 단계에서 다시 묻는다 | 같은 답 |
 | R1 | 바인딩 크레이트 `tasty-net-ffi`는 tasty-network에 두고, 앱 cdylib에 rlib으로 링크해 ABI별 `.so` 하나로 싣는다. Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. UniFFI 판은 tasty-network가 고정하는 최신 안정판을 두 레포가 함께 쓴다 | 같은 답 |
-| R2 | 6절 요구 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다. 6절 #12~#15와 #7 행의 "이 문서가 더한 확인 항목"은 이 문서가 더한 것이고 아직 전달 전이다 | 같은 답 |
+| R2 | 6절 요구 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다. 6절 #12~#15와 #7+ 행(#7에 이 문서가 더한 확인 항목)은 이 문서가 더한 것이고 2026-11-27에 전달됐다. tasty-network 쪽 위치는 6절에 적는다 | 같은 답 |
 | R3 | tasty에 두 작업을 만든다. (B) attach 도메인 메시지·descriptor의 serde 타입만 담은 작은 크레이트(Android에서 빌드 가능), (A) 읽기 전용 원자 메서드 `workspace.overview`. 크레이트 이름과 sha는 tasty에 반영된 뒤 받는다 | tasty 쪽 의견(tasty develop `a8c4d26f4d` 기준), 2026-11-27 |
 | SSH 파일 계약 | 앱의 `ssh/` 폴더를 `~/.ssh`로 본다. OpenSSH도 모르는 지시어는 거절한다. `@cert-authority` 줄은 1단계에서 믿지 않는다. 호스트 키 확인 콜백은 `StrictHostKeyChecking ask`일 때 부르고, `accept-new`는 묻지 않고 기록한다 | tasty-network 후속 결정(2026-11-27). 사용자에게 묻지 않는다 |
 | iOS | 구조만 iOS가 가능하게 둔다. 이 레포는 iOS 앱을 만들지 않는다 | 사용자 결정 |
@@ -282,7 +282,7 @@
 
 ## 6. tasty-network 요구 목록 (NEEDS-REPO R2)
 
-R2 처리 결과: 아래 첫 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다(2026-11-27). 이 문서가 더한 것(#7 행의 둘째 칸 확인 항목, 아래 둘째 표 #12~#15)은 아직 전달 전이다. "원래 상태"는 R2 전에 tasty-network 쪽에 무엇이 있었는지다. R2 전의 요구는 exec(표준 입출력·종료 상태)와 SFTP 지원, 같은 세션 위에서 함께 쓰는 경계까지였고, 그 위의 세부 API(출력 상한·시간 제한·취소·env, 범위 읽기, 실패 분류 등)는 R2가 구체화했다. "후속 작업 문서" 열은 tasty-network의 내장 SSH 작업·ffi 작업 문서에 그 항목이 직접 적혀 있는지(있음), 전달 기록으로만 확인되는지(전달 기록)다.
+R2 처리 결과: 아래 첫 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다(2026-11-27). 이 문서가 더한 것(#7+ 행, 아래 둘째 표 #12~#15)도 전달됐다(2026-11-27). 그 항목들이 tasty-network 설계 문서의 어디에 들어갔는지는 각 행에 적는다(tasty-network develop `130c5d4` 기준). "원래 상태"는 R2 전에 tasty-network 쪽에 무엇이 있었는지다. R2 전의 요구는 exec(표준 입출력·종료 상태)와 SFTP 지원, 같은 세션 위에서 함께 쓰는 경계까지였고, 그 위의 세부 API(출력 상한·시간 제한·취소·env, 범위 읽기, 실패 분류 등)는 R2가 구체화했다. "후속 작업 문서" 열은 tasty-network의 내장 SSH 작업·ffi 작업 문서에 그 항목이 직접 적혀 있는지(있음), 전달 기록으로만 확인되는지(전달 기록)다.
 
 | # | 항목 | 앱이 쓰는 곳 | 원래 상태 / 후속 작업 문서 |
 |---|---|---|---|
@@ -294,7 +294,7 @@ R2 처리 결과: 아래 첫 표 #1~#11(6b·7b 포함)을 tasty-network에 전�
 | 6 | 한 SSH 세션을 터널·exec·SFTP가 함께 쓰는 경계 | 5.3, 5.7 | 이미 요청됨 / 있음 |
 | 6b | attach 없이 쓰는 일반 SSH 세션의 수명·끊김 이벤트를 `ConnectionTable`과 같은 상태 API로 보기 | 5.7 | 새 / 있음 |
 | 7 | 원격 Tasty attach 경로: exec 포트 발견 → `direct-tcpip` → handshake v2 → `attach`·`request`·`bulk` 채널. 채널 위 프레임 읽기·쓰기를 FFI로 노출(도메인 해석은 앱·tasty 쪽). 토큰은 FFI 밖 로그·UI·오류·Debug 출력에 내지 않는다 | 5.4 | 경로는 설계에 있음. FFI 노출 범위는 새 / 있음 (전달됨) |
-| 7+ | #7에 이 문서가 더한 확인 항목: 1단계용으로 `RequestClient`(호출·닫는 핸들)를 감싸 노출, 상대 `caps`(`net.request`)를 앱이 볼 수 있게, `RequestError::ResponseTooLarge`·두 `PeerTooOld` 경로의 `evidence` 보존, 발견과 터널의 유효 대상 일치를 transport 경로에서 확인하고 불일치를 오류로 넘기기 | 5.4 | 새 / 아직 전달 전 |
+| 7+ | #7에 이 문서가 더한 확인 항목: 1단계용으로 `RequestClient`(호출·닫는 핸들)를 감싸 노출, 상대 `caps`(`net.request`)를 앱이 볼 수 있게, `RequestError::ResponseTooLarge`·두 `PeerTooOld` 경로의 `evidence` 보존, 발견과 터널의 유효 대상 일치를 transport 경로에서 확인하고 불일치를 오류로 넘기기 | 5.4 | 새 / 전달됨(2026-11-27). `RequestClient`·`caps`·`evidence`는 `docs/design/mobile.md` "바인딩 API (요구를 받을 자리)"의 요청 채널 행과 "android 요구의 자리" #7+ 행. 발견과 터널의 대상 일치는 `docs/design/ssh-backends.md` "포트 발견과 터널의 대상 일치"(불일치는 `ConnectError::TargetMismatch`) |
 | 7b | `PeerKeyStore`(앱이 구현하는 신뢰 저장소)의 FFI 경계: 앱이 구현하는 콜백 인터페이스, 최초 등록 원자성, 사용자 재등록 | 5.4 | 새 / 있음 |
 | 8 | 연결 목록·사유·`is_retryable()`·`EventStream::next(timeout)`·`AppEvent` | 5.7 | 진행 중 초안에 있음 / 있음 |
 | 9 | identity: 앱이 준 폴더의 기기 키 만들기·읽기. `File::lock`이 Android에서 잠그는지는 연결 레코드 경로의 문제라 따로 확인한다 | 5.4 | 기기 키는 있음. `File::lock` 확인은 새 / 있음 |
@@ -303,14 +303,14 @@ R2 처리 결과: 아래 첫 표 #1~#11(6b·7b 포함)을 tasty-network에 전�
 
 R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdylib에 링크돼도 동작할 것, UniFFI 판을 앱과 맞출 것.
 
-이 문서를 쓰며 새로 찾은 확인 항목(모두 아직 전달 전):
+이 문서를 쓰며 새로 찾은 확인 항목(모두 전달됨, 2026-11-27). "tasty-network 쪽 위치"는 tasty-network develop `130c5d4`의 설계 문서다:
 
-| # | 항목 | 앱이 쓰는 곳 |
-|---|---|---|
-| 12 | 라이브러리 모드에서 `tasty-net-ffi` 생성 Kotlin의 패키지 이름과, 앱이 그것을 덮어쓸 필요가 있는지 | 2절 |
-| 13 | #2의 메모리 키를 config의 `IdentityFile` 참조와 잇는 규칙(5.1 제안), `IdentitiesOnly`와 함께 쓸 때의 조건, 고른 메모리 자격이 세션 재사용 키에 들어가는지 | 5.1, 5.3 |
-| 14 | 직접 LAN 연결 판정(첫 SSH 홉의 이름 풀이 결과, `.local`은 풀이 전)과, 두 사유를 FFI 오류로 따로 받는 길: (a) 소켓을 열기 전 앱의 권한 거절·회수로 연결을 시작하지 않음, (b) 연결 중 Android 권한으로 막혔을 때 소켓을 닫기 전에 읽은 차단 사유. API 29 빌드를 유지하는 호출 경계 | 5.5 |
-| 15 | 모바일 의존 쪽 검사(`6bad6ff` `mobile.md` "의존 쪽 검사")를 앱의 최종 그래프에서도 같은 조건으로 돌릴 수 있게 검사 기준을 공개 문서로 내는 것 | 7절 |
+| # | 항목 | 앱이 쓰는 곳 | tasty-network 쪽 위치 |
+|---|---|---|---|
+| 12 | 라이브러리 모드에서 `tasty-net-ffi` 생성 Kotlin의 패키지 이름과, 앱이 그것을 덮어쓸 필요가 있는지 | 2절 | `docs/design/mobile.md` "크레이트"의 Kotlin 패키지 이름 항목과 "android 요구의 자리" #12 행 |
+| 13 | #2의 메모리 키를 config의 `IdentityFile` 참조와 잇는 규칙(5.1 제안), `IdentitiesOnly`와 함께 쓸 때의 조건, 고른 메모리 자격이 세션 재사용 키에 들어가는지 | 5.1, 5.3 | `docs/design/ssh-backends.md` "android 요구의 자리" #2 행의 #13 문단, 세션 키는 같은 문서 "용도마다 해석하고, 같을 때만 세션을 나눈다". 5.1의 이름 잇기 제안은 같은 문서 "후속 작업과 미정"의 "메모리 키와 `IdentityFile` 이름" 행에 남아 있다 |
+| 14 | 직접 LAN 연결 판정(첫 SSH 홉의 이름 풀이 결과, `.local`은 풀이 전)과, 두 사유를 FFI 오류로 따로 받는 길: (a) 소켓을 열기 전 앱의 권한 거절·회수로 연결을 시작하지 않음, (b) 연결 중 Android 권한으로 막혔을 때 소켓을 닫기 전에 읽은 차단 사유. API 29 빌드를 유지하는 호출 경계 | 5.5 | `docs/design/mobile.md` "모바일의 SSH" 아래 새 절 "직접 LAN 연결 (Android 지역망 권한)"과 "android 요구의 자리" #14 행 |
+| 15 | 모바일 의존 쪽 검사(`6bad6ff` `mobile.md` "의존 쪽 검사")를 앱의 최종 그래프에서도 같은 조건으로 돌릴 수 있게 검사 기준을 공개 문서로 내는 것 | 7절 | `docs/design/mobile.md` "의존 쪽 검사"의 앱 최종 의존 그래프 항목과 "android 요구의 자리" #15 행 |
 
 ## 7. CI 계획
 
