@@ -49,7 +49,7 @@
   1. 앱과 tasty-network 양쪽의 export가 최종 `.so`에 남아 있고, 생성된 Kotlin에서 호출된다. 양쪽 생성 Kotlin이 싣는 네이티브 라이브러리 이름이 `tasty_mobile_core` 하나다.
   2. 같은 UniFFI 판을 쓴다. 앱은 지금의 `uniffi = "0.32"`를 유지하고, tasty-network가 ffi 구현 시점에 고정하는 판에 맞춘다(3절).
   3. 모든 tasty-network 의존이 같은 rev를 가리킨다.
-  4. 최종 Android 배포 빌드의 앱 전체 일반 의존 그래프에서 tasty-network의 `system-ssh` feature가 꺼져 있고, tasty-network 진행 중 초안의 의존 쪽 검사가 금지하는 나머지 항목도 없다(7절).
+  4. 최종 Android 배포 빌드의 앱 전체 일반 의존 그래프에서 tasty-network의 `system-ssh` feature가 꺼져 있고, tasty-network develop `130c5d4` `docs/design/mobile.md` "의존 쪽 검사"의 앱 최종 의존 그래프 기준(7절)을 통과한다.
 - 다른 프로그램 실행 금지는 tasty-network 경계의 규칙이다. 앱의 로컬 터미널 PTY(`tasty-terminal`이 쓰는 `portable-pty`)는 그 규칙의 대상이 아니다.
 
 ### 제안
