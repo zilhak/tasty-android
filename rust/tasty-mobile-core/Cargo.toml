@@ -13,3 +13,4 @@ crate-type = ["cdylib", "lib"]
 uniffi.workspace = true
 tasty-terminal.workspace = true
 termwiz.workspace = true
+tasty-net-identity.workspace = true
