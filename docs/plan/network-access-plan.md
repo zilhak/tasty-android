@@ -24,7 +24,7 @@
 | U3 | 앱에서 Ed25519 키를 만들어 Android Keystore의 AES 키로 감싸 저장한다. 기존 개인 키 가져오기와 공개키 복사 화면을 둔다. 비밀번호는 저장하지 않고 매번 묻는다(B) | 같은 답 |
 | U4 | 접속 프로필은 앱의 `ssh/config`(OpenSSH 형식, UI 편집과 붙여넣기 가져오기)이고, Tasty 전용 값은 앱 고유 파일에 둔다(A) | 같은 답 |
 | U5 | 연결은 앱이 앞에 있을 때만 유지한다(A)로 시작한다. 백그라운드 지속 연결을 실제로 제공하는 단계에서 다시 묻는다 | 같은 답 |
-| R1 | 바인딩 크레이트 `tasty-net-ffi`는 tasty-network에 두고, 앱 cdylib에 rlib으로 링크해 ABI별 `.so` 하나로 싣는다. Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. UniFFI 판은 tasty-network가 고정하는 최신 안정판을 두 레포가 함께 쓴다 | 같은 답 |
+| R1 | 바인딩 크레이트 `tasty-net-ffi`는 tasty-network에 두고, 앱 cdylib에 rlib으로 링크해 ABI별 `.so` 하나로 싣는다. Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. UniFFI 판은 tasty-network가 고정하는 최신 안정판을 두 레포가 함께 쓴다(판 규칙은 뒤에 바뀌었다. 3절) | 같은 답 |
 | R2 | 6절 요구 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다. 6절 #12~#15와 #7+ 행(#7에 이 문서가 더한 확인 항목)은 이 문서가 더한 것이고 2026-11-27에 전달됐다. tasty-network 쪽 위치는 6절에 적는다 | 같은 답 |
 | R3 | tasty에 두 작업을 만든다. (B) attach 도메인 메시지·descriptor의 serde 타입만 담은 작은 크레이트(Android에서 빌드 가능), (A) 읽기 전용 원자 메서드 `workspace.overview`. 크레이트 이름과 sha는 tasty에 반영된 뒤 받는다 | tasty 쪽 의견(tasty develop `a8c4d26f4d` 기준), 2026-11-27 |
 | SSH 파일 계약 | 앱의 `ssh/` 폴더를 `~/.ssh`로 본다. OpenSSH도 모르는 지시어는 거절한다. `@cert-authority` 줄은 1단계에서 믿지 않는다. 호스트 키 확인 콜백은 `StrictHostKeyChecking ask`일 때 부르고, `accept-new`는 묻지 않고 기록한다 | tasty-network 후속 결정(2026-11-27). 사용자에게 묻지 않는다 |
@@ -47,7 +47,7 @@
 - 한 cdylib으로 묶는 근거: UniFFI 라이브러리 모드는 한 cdylib에 링크된 UniFFI 크레이트 전부의 바인딩을 한 번에 만든다. 그래서 앱 export와 tasty-network export를 `.so` 하나에서 함께 생성하고 부를 수 있다. Rust 표준 라이브러리와 전역 상태도 한 벌만 실린다. (런타임이 두 벌 실린다는 근거는 쓰지 않는다. `tasty-terminal`@`e1e705bc`는 tokio에 의존하지 않는다.)
 - 계약(R1 판정 기준):
   1. 앱과 tasty-network 양쪽의 export가 최종 `.so`에 남아 있고, 생성된 Kotlin에서 호출된다. 양쪽 생성 Kotlin이 싣는 네이티브 라이브러리 이름이 `tasty_mobile_core` 하나다.
-  2. 같은 UniFFI 판을 쓴다. 앱은 `work/android-terminal`의 `uniffi = "0.32"`를 tasty-network가 고정하는 판으로 올린다.
+  2. 같은 UniFFI 판을 쓴다. 앱은 지금의 `uniffi = "0.32"`를 유지하고, tasty-network가 ffi 구현 시점에 고정하는 판에 맞춘다(3절).
   3. 모든 tasty-network 의존이 같은 rev를 가리킨다.
   4. 최종 Android 배포 빌드의 앱 전체 일반 의존 그래프에서 tasty-network의 `system-ssh` feature가 꺼져 있고, tasty-network 진행 중 초안의 의존 쪽 검사가 금지하는 나머지 항목도 없다(7절).
 - 다른 프로그램 실행 금지는 tasty-network 경계의 규칙이다. 앱의 로컬 터미널 PTY(`tasty-terminal`이 쓰는 `portable-pty`)는 그 규칙의 대상이 아니다.
@@ -72,7 +72,7 @@
 
 - `tasty-net-ffi`는 tasty-network 레포에 둔다. 앱은 자기 cdylib `tasty-mobile-core`에 그 크레이트를 rlib으로 링크해 ABI별 `.so` 하나로 싣는다.
 - Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. tasty-network는 Gradle, AAR 묶기, 앱 서명을 갖지 않는다(진행 중 초안 "바인딩 층").
-- UniFFI 판은 tasty-network가 고정하는 최신 안정판이다. 앱은 0.32에서 그 판으로 올린다.
+- UniFFI 판은 두 레포가 같은 판을 쓴다. 앱은 지금 0.32를 유지한다. 후보는 0.33.0이고, 판 고정은 tasty-network의 ffi 구현 시점에 한다(tasty-network develop `130c5d4` `mobile.md` "크레이트"의 UniFFI 판 항목도 "앱과 같은 판, 앱은 지금 0.32"로 적는다).
 - Android용 태그가 나오기 전에는 git 의존 `rev = "130c5d46a59e7fb05b598ae2eb5ff5c77fda0005"`(tasty-network develop `130c5d4`) 고정으로 시작한다. 태그로 올리는 시점은 tasty 전환과 같은 태그다.
 
 ### 제안
