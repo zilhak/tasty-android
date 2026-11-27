@@ -2,7 +2,9 @@
 //!
 //! Wraps the desktop `tasty-terminal` crate (PTY + VTE) so Kotlin can run a local shell
 //! and draw its screen. Kotlin owns the theme, so colors cross the boundary unresolved.
+//! It also holds the device key of the Tasty network (`device`).
 
+mod device;
 mod snapshot;
 mod tree;
 mod workspace;
@@ -12,6 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use tasty_terminal::{Pty, Terminal, TerminalConfig, TerminalViewport, spawn_terminal};
 
+pub use device::{DeviceKeyError, DeviceKeyInfo, load_or_create_device_key};
 pub use snapshot::{CellColor, ScreenSnapshot, TextSpan};
 pub use tree::SplitOrientation;
 pub use workspace::{
