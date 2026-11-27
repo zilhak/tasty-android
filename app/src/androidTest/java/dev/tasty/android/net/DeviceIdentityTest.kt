@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,6 +43,21 @@ class DeviceIdentityTest {
         assertTrue(first, DEVICE_ID.matches(first))
         assertEquals(first, second)
         assertTrue(File(keyDir, "device_key").isFile)
+    }
+
+    @Test
+    fun anExistingKeyIsNotReplaced() {
+        val first = DeviceIdentity(keyDir).deviceId()
+        val keyFile = File(keyDir, "device_key")
+        val bytes = keyFile.readBytes()
+        val modified = keyFile.lastModified()
+        // The clock of the file system may be coarse; wait so a rewrite would move the time.
+        Thread.sleep(1_100)
+        val again = DeviceIdentity(keyDir).deviceId()
+        Log.i(TAG, "keep: first=$first again=$again modified=$modified")
+        assertEquals(first, again)
+        assertArrayEquals(bytes, keyFile.readBytes())
+        assertEquals(modified, keyFile.lastModified())
     }
 
     @Test
