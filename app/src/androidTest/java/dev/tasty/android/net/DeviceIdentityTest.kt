@@ -1,0 +1,75 @@
+package dev.tasty.android.net
+
+import android.util.Log
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+/** Runs the device key through Kotlin, the UniFFI binding and the Rust library on a device. */
+@RunWith(AndroidJUnit4::class)
+class DeviceIdentityTest {
+    private lateinit var parent: File
+    private lateinit var keyDir: File
+
+    @Before
+    fun makeFolder() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        parent = File(context.cacheDir, "tasty-net-test-${System.nanoTime()}")
+        check(parent.mkdirs()) { "cannot create $parent" }
+        keyDir = File(parent, "keys")
+    }
+
+    @After
+    fun removeFolder() {
+        parent.deleteRecursively()
+    }
+
+    @Test
+    fun createsAndReloadsTheSameDeviceId() {
+        val first = DeviceIdentity(keyDir).deviceId()
+        val second = DeviceIdentity(keyDir).deviceId()
+        Log.i(TAG, "reload: first=$first second=$second")
+        assertTrue(first, DEVICE_ID.matches(first))
+        assertEquals(first, second)
+        assertTrue(File(keyDir, "device_key").isFile)
+    }
+
+    @Test
+    fun threadsCreatingAtOnceGetTheSameDeviceId() {
+        val threads = 8
+        val barrier = CyclicBarrier(threads)
+        val pool = Executors.newFixedThreadPool(threads)
+        try {
+            val futures =
+                List(threads) {
+                    pool.submit(
+                        Callable {
+                            barrier.await(10, TimeUnit.SECONDS)
+                            DeviceIdentity(keyDir).deviceId()
+                        },
+                    )
+                }
+            val ids = futures.map { it.get(30, TimeUnit.SECONDS) }
+            Log.i(TAG, "race: ${ids.size} threads, distinct=${ids.toSet()}")
+            assertEquals(ids.toString(), 1, ids.toSet().size)
+            assertTrue(ids.first(), DEVICE_ID.matches(ids.first()))
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    private companion object {
+        const val TAG = "DeviceIdentityTest"
+        val DEVICE_ID = Regex("[0-9a-f]{64}")
+    }
+}
