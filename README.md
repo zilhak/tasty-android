@@ -24,7 +24,7 @@ The Gradle wrapper downloads Gradle itself. On Windows, use `gradlew.bat` (or `.
 | Debug APK | `./gradlew assembleDebug` (output: `app/build/outputs/apk/debug/app-debug.apk`) |
 | Rust format, Clippy, tests | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked` (run in `rust/`) |
 
-CI runs the Rust checks, then the same four Gradle checks in this order on every push to `main` and every pull request (`.github/workflows/ci.yml`).
+CI runs the Rust checks, then the same four Gradle checks in this order on every push to `develop`, `release` and `main` and on every pull request into one of them (`.github/workflows/ci.yml`).
 
 Formatting uses ktlint through Spotless and covers `*.kt` and `*.kts`. Rules live in `.editorconfig`. ktlint keeps `.editorconfig` cached in the Gradle daemon, so run `./gradlew --stop` after changing it.
 
