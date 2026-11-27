@@ -34,6 +34,8 @@ Android Lint treats warnings as errors. Checks that only report newer upstream v
 
 The app runs a local shell through `rust/tasty-mobile-core`, which wraps the desktop app's `tasty-terminal` crate (PTY and terminal emulation) and exposes it to Kotlin with UniFFI. `tasty-terminal` is a git dependency pinned to a commit of github.com/zilhak/tasty; bump `rev` in `rust/Cargo.toml` on purpose.
 
+It also loads or creates the Tasty network device key through `tasty-net-identity`, a git dependency pinned to a develop commit of github.com/zilhak/tasty-network until that repository tags an Android release. To move to a newer commit, set the full sha as `rev` in `rust/Cargo.toml`, run `cargo update -p tasty-net-identity` in `rust/`, and commit the manifest and `Cargo.lock` together.
+
 Gradle builds it as part of the app:
 
 - `cargoNdkBuild` builds `libtasty_mobile_core.so` in release mode for `arm64-v8a` and `x86_64`. Pass `-Ptasty.rustAbis=x86_64` to build one ABI while working on an emulator.
