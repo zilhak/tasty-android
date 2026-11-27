@@ -8,7 +8,7 @@
   - 이 레포 develop `84278b0`.
   - tasty-network develop `b103e9073b9e0e33ac5f586d8cb3b3825f54fa1b`(짧게 `b103e90`). 이 문서에서 `@b103e90`을 붙인 인용은 그 커밋의 파일이다.
   - tasty-network의 모바일 설계(`docs/design/mobile.md`)와 SSH 백엔드 설계(`docs/design/ssh-backends.md`)는 develop `558d4c7`(`558d4c72fa9b541046d3bbafa205771b87dd123c`)에 들어갔다. 이 문서는 그 두 문서를 develop `558d4c7`로 인용한다. 그 전의 진행 중 초안(`bcbcfba`, 그 뒤 수정본 `6bad6ff`)을 인용한 곳은 develop 판과 내용이 달라 그대로 남긴 곳이다(그 초안의 기록이다). 이름과 값은 구현 작업에서 바뀔 수 있다.
-  - 사용자 작업 브랜치 `work/android-terminal` `4415132f9e35247b98f328d2d5546b302c5dd8d6`(기점 `ab57f98`, 커밋 9개, 공개 원격에는 아직 없다). 로컬 터미널 화면과 Rust 연결 구조가 들어 있다. 사용자 결정 U1에 따라 이 브랜치를 develop에 반영하는 작업이 따로 있고, 이 문서는 그 구조를 이어 쓴다고 전제한다.
+  - 사용자 작업 브랜치 `work/android-terminal` `4415132f9e35247b98f328d2d5546b302c5dd8d6`(기점 `ab57f98`, 커밋 9개, 공개 원격에는 아직 없다). 로컬 터미널 화면과 Rust 연결 구조가 들어 있다. 사용자 결정 U1에 따라 이 브랜치는 develop `ccc0022`에 반영됐다(원본 커밋 9개를 develop 위로 올린 커밋과 CI 트리거 커밋 `ccc0022`. 올린 커밋이라 sha는 원본과 다르다. develop push CI 성공). 이 문서는 그 구조를 이어 쓴다.
 - 쓰는 방법: 각 절은 **정해진 것 / 제안 / 결정 대기**로 나눈다. "정해진 것"은 아래 결정 표나 레포 지침에 출처가 있는 것이다. "제안"은 이 계획이 고른 설계이며 Codex 검증과 구현 리뷰에서 바뀔 수 있다. "결정 대기"는 사용자나 다른 레포가 정할 것이다.
 
 ### 결정 표
@@ -320,9 +320,9 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 ### 정해진 것
 
 - develop `84278b0`의 CI(`.github/workflows/ci.yml`)는 `ubuntu-latest` 한 잡, `timeout-minutes: 30`, SDK 설치(`platforms;android-37.0`, `build-tools;37.0.0`) 뒤 4단계: `spotlessCheck` → `lint` → `test` → `assembleDebug`. 실패하면 `app/build/reports/`를 올린다.
-- `work/android-terminal`의 CI는 그 위에 다음을 더한다(U1로 반영 예정): SDK 설치에 `ndk;30.0.16248370`, `rust/`에서 `rustup show active-toolchain || rustup toolchain install`과 `cargo install cargo-ndk --version 4.1.2 --locked`, `Swatinem/rust-cache@v2`(`workspaces: rust`), `rust/`에서 `cargo fmt --all --check`·`cargo clippy --workspace --all-targets --locked -- -D warnings`·`cargo test --workspace --locked`, 그 뒤 기존 Gradle 4단계.
+- `work/android-terminal`의 CI는 그 위에 다음을 더한다(U1로 develop `ccc0022`에 반영됨): SDK 설치에 `ndk;30.0.16248370`, `rust/`에서 `rustup show active-toolchain || rustup toolchain install`과 `cargo install cargo-ndk --version 4.1.2 --locked`, `Swatinem/rust-cache@v2`(`workspaces: rust`), `rust/`에서 `cargo fmt --all --check`·`cargo clippy --workspace --all-targets --locked -- -D warnings`·`cargo test --workspace --locked`, 그 뒤 기존 Gradle 4단계.
 - 생성된 UniFFI Kotlin은 커밋하지 않는다. `app/build/` 아래에 생기고 `.gitignore`의 `build/`에 들어간다. `spotlessCheck`도 `**/build/**`를 빼고 본다(루트 `build.gradle.kts`).
-- CI의 push 대상 브랜치를 git-flow에 맞추는 일은 U1 반영 작업이 한다.
+- CI의 push 대상 브랜치를 git-flow에 맞추는 일은 U1 반영에서 했다(`ccc0022`: `develop`·`release`·`main`의 push와 그 브랜치로 가는 pull request에서 CI를 돈다).
 
 ### 제안
 
@@ -346,7 +346,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 | 단계 | 내용 | 선행(레포·사용자 결정) |
 |---|---|---|
 | ① 원격 빌드 칸 | Android 빌드와 에뮬레이터 시험을 도는 원격 Windows 빌드 칸 | 없음 |
-| ①′ 터미널 브랜치 반영 | `work/android-terminal`을 develop 위로 올리고 CI 4단계와 Rust 검사를 돌려 반영한다 | ①, U1 |
+| ①′ 터미널 브랜치 반영 | `work/android-terminal`을 develop 위로 올리고 CI 4단계와 Rust 검사를 돌려 반영한다. develop `ccc0022`에 반영됐다(develop push CI 성공) | ①, U1 |
 | ② Rust 연결 기반 | tasty-network develop rev 고정(`130c5d4`). 앱 cdylib의 임시 export(3절)로 `noBackupFilesDir/net/` 아래 최종 키 폴더(5.4)에 기기 키를 만들고 읽고 기기 ID를 돌려준다. 두 ABI `.so`와 생성 Kotlin | ①′, 이 계획의 검증. b103e90의 transport는 시스템 ssh 크레이트에 늘 의존하므로 이 단계는 identity만 의존한다. 이미 있는 증거(b103e90 크레이트의 `aarch64-linux-android` `cargo check`)와 이 단계가 새로 내야 할 증거(두 ABI에서 API 29로 앱 링크, 기기·에뮬레이터 위 실행)를 나눈다 |
 | ③ ffi로 교체 | `tasty-net-ffi`가 생기면 그것을 rlib으로 링크하고 ②의 임시 export를 지운다. ②와 같은 키 폴더를 넘겨 기기 ID를 유지한다. UniFFI 판을 맞추고 scaffolding 재노출(2절)을 붙인다 | tasty-network: transport ssh feature 분리, 내장 SSH(exec·SFTP), ssh-config 이식, ffi 크레이트, UniFFI 판 고정. 진행 중 초안의 ffi 의존에는 `tasty-net-p2p`가 들어 있으므로, 그 구성이 유지되면 p2p 크레이트의 반영도 선행이다 |
 | ④ SSH 프로필 + exec + SFTP 읽기 | 5.1~5.3. 프로필 파일·키 생성과 가져오기, Git 정보, Explorer 읽기. 앱 수명 이벤트 연결(`AppEvent`), 백그라운드 정리(5.7), LAN 권한 경로(5.5)를 함께 만든다 | ③, #1·#2·#3·#4·#6·#13·#14. 화면 범위는 Git 정보 범위(기획 3.2)·뷰어(기획 3.3)의 사용자 결정 |
