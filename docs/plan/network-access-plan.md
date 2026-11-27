@@ -25,7 +25,7 @@
 | U4 | 접속 프로필은 앱의 `ssh/config`(OpenSSH 형식, UI 편집과 붙여넣기 가져오기)이고, Tasty 전용 값은 앱 고유 파일에 둔다(A) | 같은 답 |
 | U5 | 연결은 앱이 앞에 있을 때만 유지한다(A)로 시작한다. 백그라운드 지속 연결을 실제로 제공하는 단계에서 다시 묻는다 | 같은 답 |
 | R1 | 바인딩 크레이트 `tasty-net-ffi`는 tasty-network에 두고, 앱 cdylib에 rlib으로 링크해 ABI별 `.so` 하나로 싣는다. Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. UniFFI 판은 tasty-network가 고정하는 최신 안정판을 두 레포가 함께 쓴다 | 같은 답 |
-| R2 | 6절 요구 목록 전체를 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다 | 같은 답 |
+| R2 | 6절 요구 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다. 6절 #12~#15와 #7 행의 "이 문서가 더한 확인 항목"은 이 문서가 더한 것이고 아직 전달 전이다 | 같은 답 |
 | R3 | tasty에 두 작업을 만든다. (B) attach 도메인 메시지·descriptor의 serde 타입만 담은 작은 크레이트(Android에서 빌드 가능), (A) 읽기 전용 원자 메서드 `workspace.overview`. 크레이트 이름과 sha는 tasty에 반영된 뒤 받는다 | tasty 쪽 의견(tasty develop `a8c4d26f4d` 기준), 2026-11-27 |
 | SSH 파일 계약 | 앱의 `ssh/` 폴더를 `~/.ssh`로 본다. OpenSSH도 모르는 지시어는 거절한다. `@cert-authority` 줄은 1단계에서 믿지 않는다. 호스트 키 확인 콜백은 `StrictHostKeyChecking ask`일 때 부르고, `accept-new`는 묻지 않고 기록한다 | tasty-network 후속 결정(2026-11-27). 사용자에게 묻지 않는다 |
 | iOS | 구조만 iOS가 가능하게 둔다. 이 레포는 iOS 앱을 만들지 않는다 | 사용자 결정 |
@@ -49,7 +49,7 @@
   1. 앱과 tasty-network 양쪽의 export가 최종 `.so`에 남아 있고, 생성된 Kotlin에서 호출된다. 양쪽 생성 Kotlin이 싣는 네이티브 라이브러리 이름이 `tasty_mobile_core` 하나다.
   2. 같은 UniFFI 판을 쓴다. 앱은 `work/android-terminal`의 `uniffi = "0.32"`를 tasty-network가 고정하는 판으로 올린다.
   3. 모든 tasty-network 의존이 같은 rev를 가리킨다.
-  4. 최종 Android 배포 빌드의 앱 전체 일반 의존 그래프에서 tasty-network의 `system-ssh` feature가 꺼져 있다. tasty-network 진행 중 초안의 의존 쪽 검사가 함께 금지하는 `tokio`의 `process` feature와 `russh-config` 크레이트도 그래프에 없다(7절).
+  4. 최종 Android 배포 빌드의 앱 전체 일반 의존 그래프에서 tasty-network의 `system-ssh` feature가 꺼져 있고, tasty-network 진행 중 초안의 의존 쪽 검사가 금지하는 나머지 항목도 없다(7절).
 - 다른 프로그램 실행 금지는 tasty-network 경계의 규칙이다. 앱의 로컬 터미널 PTY(`tasty-terminal`이 쓰는 `portable-pty`)는 그 규칙의 대상이 아니다.
 
 ### 제안
@@ -78,9 +78,9 @@
 ### 제안
 
 - 새로 합의한 것: 진행 중 초안 `bcbcfba`의 "바인딩 층"은 `crate-type = ["lib", "cdylib", "staticlib"]`의 `lib`를 "생성과 시험용"으로만 적었다. R1은 다른 cdylib에 rlib으로 링크돼도 동작하는 것(`uniffi::setup_scaffolding!` 네임스페이스 충돌 없음)을 요구로 더한다. 이 요구는 tasty-network ffi 작업에 전달됐다.
-- ②단계의 임시 브리지: b103e90의 `tasty-net-identity`는 UniFFI export가 없다(의존은 `ed25519-dalek`·`getrandom`·`serde_json`·`subtle`·`tracing`). 그래서 ②에서는 `tasty-mobile-core`가 기기 키 만들기·읽기와 기기 ID 문자열 반환만 자기 export로 감싼다. ③에서 `tasty-net-ffi`가 같은 기능을 내면 이 임시 export를 지우고 ffi 쪽 API로 바꾼다. 두 단계가 같은 키 폴더를 넘겨야 기기 ID가 바뀌지 않는다(5.4). 임시 export는 앱 안에서만 쓰고 다른 Rust 타입을 FFI로 노출하지 않아, 바꿀 때 Kotlin 호출 자리만 고치면 되게 한다.
+- ②단계의 임시 브리지: b103e90의 `tasty-net-identity`는 UniFFI에 의존하지 않고 UniFFI export가 없다(`crates/tasty-net-identity/Cargo.toml`@b103e90). 그래서 ②에서는 `tasty-mobile-core`가 기기 키 만들기·읽기와 기기 ID 문자열 반환만 자기 export로 감싼다. ③에서 `tasty-net-ffi`가 같은 기능을 내면 이 임시 export를 지우고 ffi 쪽 API로 바꾼다. 두 단계가 같은 키 폴더를 넘겨야 기기 ID가 바뀌지 않는다(5.4). 임시 export는 앱 안에서만 쓰고 다른 Rust 타입을 FFI로 노출하지 않아, 바꿀 때 Kotlin 호출 자리만 고치면 되게 한다.
 - 판을 올릴 때 생성 명령을 다시 본다. 진행 중 초안 `6bad6ff`는 UniFFI 0.33.0의 `uniffi-bindgen`이 라이브러리 모드를 기본으로 하고 `--library` 플래그를 deprecated로 둔다고 적는다. `work/android-terminal`의 `uniffiBindgen` 작업은 `--library`를 넘긴다. 판을 올리는 커밋에서 그 판의 문서로 인자를 고친다.
-- rev를 올리는 단위: tasty-network rev(또는 태그)를 올리는 커밋은 `rust/Cargo.toml`과 `rust/Cargo.lock`을 함께 바꾸고, 그 커밋 하나가 앱 빌드와 생성 Kotlin을 통과해야 한다. tasty 도메인 타입 크레이트(R3 B)가 같은 tasty-network 판을 따로 의존하면 3절 계약 3(같은 rev)이 깨질 수 있으므로, rev를 올릴 때 tasty 쪽 rev도 같은 태그 기준인지 함께 본다.
+- rev를 올리는 단위: tasty-network rev(또는 태그)를 올리는 커밋은 `rust/Cargo.toml`과 `rust/Cargo.lock`을 함께 바꾸고, 그 커밋 하나가 앱 빌드와 생성 Kotlin을 통과해야 한다. tasty 도메인 타입 크레이트(R3 B)가 같은 tasty-network 판을 따로 의존하면 2절 계약 3(같은 rev)이 깨질 수 있으므로, rev를 올릴 때 tasty 쪽 rev도 같은 태그 기준인지 함께 본다.
 
 ### 결정 대기
 
@@ -96,13 +96,13 @@
 - Gradle 작업 `uniffiBindgen`: 첫 ABI의 `libtasty_mobile_core.so`로 `cargo run --release --locked -q -p uniffi-bindgen -- generate --library <so> --language kotlin --no-format --out-dir <출력>`을 실행한다. 출력은 `app/build/generated/source/uniffi`. bindgen은 workspace 안의 `uniffi-bindgen` 크레이트라 따로 설치하지 않는다.
 - `androidComponents.onVariants`가 두 출력을 각 변형의 `jniLibs`와 `kotlin` 생성 폴더로 연결한다(`addGeneratedSourceDirectory`).
 - JNA는 `aar` 형식으로 의존한다(`libs.versions.toml` `jna = "5.19.1"`).
-- Rust 쪽: `rust/Cargo.toml` workspace(`tasty-mobile-core`, `uniffi-bindgen`), `rust/Cargo.lock`, `rust/rust-toolchain.toml`(`1.96.0`, targets `aarch64-linux-android`·`x86_64-linux-android`). release profile `lto = "thin"`, `codegen-units = 1`, `strip = "debuginfo"`. Rust는 늘 release로 빌드한다(터미널의 debug 빌드가 너무 느리다는 이유, 같은 파일 주석).
+- Rust 쪽: `rust/Cargo.toml` workspace(`tasty-mobile-core`, `uniffi-bindgen`), `rust/Cargo.lock`, `rust/rust-toolchain.toml`(`1.96.0`, targets `aarch64-linux-android`·`x86_64-linux-android`). release profile `lto = "thin"`, `codegen-units = 1`, `strip = "debuginfo"`. Rust는 늘 release로 빌드한다(터미널의 debug 빌드가 너무 느리다는 이유, 같은 브랜치 `app/build.gradle.kts` 주석).
 - 도구 판: cargo-ndk `4.1.2`(같은 브랜치의 CI가 고정한 판). ABI는 64비트 둘만 쓴다(32비트 제외). tasty-network 진행 중 초안의 Android target(`aarch64-linux-android`·`x86_64-linux-android`, NDK API 수준 29)과 같다. 앱 `minSdk = 29`와 `-P 29`도 같다.
 
 ### 제안
 
-- `cargoNdkBuild` 입력 보강: 지금 입력은 `rust/` 아래 `Cargo.toml`, `Cargo.lock`, `*/Cargo.toml`, `*/src/**`, `*/uniffi.toml`과 ABI 목록·`minSdk`이고, NDK 폴더는 `@Internal`이다. 그래서 `rust/rust-toolchain.toml`이나 `ndkVersion`만 바꾸면 작업이 다시 돌지 않는다. 두 값을 입력에 넣는다(툴체인 파일은 입력 파일로, NDK 판은 `@Input` 문자열로).
-- `uniffiBindgen` 입력 보강: 지금 선언한 입력은 첫 ABI의 `.so` 하나다(`PathSensitivity.NONE`). 그래서 `.so` 내용이 같으면 앞 작업이 다시 돌아도 생성을 건너뛰고, 반대로 `uniffi.toml`이나 `uniffi-bindgen` 크레이트(소스·판)만 바뀌어 Kotlin 출력이 달라져야 할 때도 건너뛸 수 있다. 생성기 크레이트 소스, 생성에 쓰는 `uniffi.toml`, `Cargo.lock`, 툴체인 파일을 이 작업의 입력으로도 선언한다. NDK 판이나 ABI 목록은 `.so`를 바꾸는 경로로만 생성에 영향을 준다.
+- `cargoNdkBuild` 입력 보강: 지금 입력(정본: `app/build.gradle.kts`의 `cargoNdkBuild` 등록과 `CargoNdkBuild` 선언)에는 `rust/rust-toolchain.toml`이 없고 NDK 폴더는 `@Internal`이다. 그래서 `rust/rust-toolchain.toml`이나 `ndkVersion`만 바꾸면 작업이 다시 돌지 않는다. 두 값을 입력에 넣는다(툴체인 파일은 입력 파일로, NDK 판은 `@Input` 문자열로).
+- `uniffiBindgen` 입력 보강: 지금 선언한 입력은 첫 ABI의 `.so` 하나다(정본: `UniffiBindgen` 선언). 그래서 `.so` 내용이 같으면 앞 작업이 다시 돌아도 생성을 건너뛰고, 반대로 `uniffi.toml`이나 `uniffi-bindgen` 크레이트(소스·판)만 바뀌어 Kotlin 출력이 달라져야 할 때도 건너뛸 수 있다. 생성기 크레이트 소스, 생성에 쓰는 `uniffi.toml`, `Cargo.lock`, 툴체인 파일을 이 작업의 입력으로도 선언한다. NDK 판이나 ABI 목록은 `.so`를 바꾸는 경로로만 생성에 영향을 준다.
 - APK 패키징 ABI: `tasty.rustAbis`는 cargo-ndk 출력만 줄인다. `work/android-terminal`의 Gradle에는 `abiFilters`가 없고, JNA `5.19.1` AAR에는 `armeabi-v7a`·`x86` 등의 `libjnidispatch.so`도 들어 있다. 그래서 지금 APK에는 Rust `.so`가 없는 ABI 폴더가 생길 수 있다. 64비트 두 ABI 정책을 `defaultConfig.ndk.abiFilters`(또는 같은 뜻의 패키징 설정)에도 적용해 두 네이티브 라이브러리가 ABI마다 짝을 이루게 한다. 한 ABI만 빌드하는 개발용 `-Ptasty.rustAbis`는 패키징 ABI도 같은 값으로 줄인다.
 - git 의존: tasty-network·tasty rev를 바꾸면 `rust/Cargo.toml`과 `rust/Cargo.lock`이 바뀌므로 지금 입력으로도 다시 돈다. git 의존의 소스는 `CARGO_HOME`의 git 캐시에 받는다. `--locked`는 lock 파일 변경만 막고 네트워크 받기는 막지 않는다. 오프라인 빌드는 목표로 두지 않는다. 캐시가 비어 있으면 받고, 있으면 다시 받지 않는 것이 기대 동작이다.
 - Gradle 빌드 캐시: 두 작업은 `@CacheableTask`가 아니므로 빌드 캐시에 저장되지 않고 최신 여부 확인(up-to-date)만 받는다. `.so` 두 벌은 크고, Rust 쪽은 `rust/target`이 따로 증분을 맡으므로 이대로 둔다. 구성 캐시(`gradle.properties`의 `org.gradle.configuration-cache=true`)와는 지금 구조(`ExecOperations` 주입, provider 연결)가 맞는지 4절 검증 항목으로 본다.
@@ -129,11 +129,11 @@
 - 프로필 형식(U4): 앱 저장소의 `ssh/config`(OpenSSH 형식). 앱 UI로 편집하고, 데스크톱 `~/.ssh/config`를 붙여 넣어 가져올 수 있다. Tasty 전용 값(원격 `tasty` 실행 파일 경로 등)은 앱 고유 파일에 둔다.
 - 키와 비밀(U3): 앱에서 Ed25519 키를 만들고 개인 키를 Keystore의 AES 키로 감싸 저장한다. 기존 개인 키를 가져올 수 있다. 공개키를 복사하는 화면을 둔다. 비밀번호는 저장하지 않고 연결할 때마다 묻는다. 감싼 키는 앱이 풀어 메모리 바이트로 라이브러리에 넘긴다(#2).
 - SSH 파일 계약(결정 표 "SSH 파일 계약"): 앱의 `ssh/`를 `~/.ssh`로 보고, 모르는 지시어는 거절하고, `@cert-authority`는 1단계에서 믿지 않고, 호스트 키 확인은 `ask`일 때만 묻는다. 바뀐 키·폐기된 키는 `accept-new`·`ask`에서도 거절한다.
-- 호스트 키 정책 보존(제안): tasty-network 진행 중 설계의 `with_verify`는 사용자 config보다 먼저 `StrictHostKeyChecking=accept-new`를 적용한다(`6bad6ff` `ssh-backends.md`). 앱이 이것을 일괄로 켜면 가져온 config의 `ask`가 묻지 않게 된다. 앱은 그 덮어쓰기를 쓰지 않고 프로필의 유효 호스트 키 정책을 그대로 둔다. config에 값이 없을 때의 기본값은 ④에서 정하되 config 값보다 앞에 두지 않는다.
 - 내장 백엔드가 읽는 자리: 앱 내부 저장소의 `noBackupFilesDir`(5.6) 아래 OpenSSH 형식 파일. tasty-network 진행 중 초안의 설정값은 판마다 다르다. `bcbcfba`는 `embedded.home` 하나로 `~`를 펼쳤다. `6bad6ff`(`ssh-backends.md` "내장 백엔드가 읽는 파일")는 두 값을 함께 둔다: `embedded.ssh_dir`(ssh 폴더. 설정 파일 안의 `~/.ssh/`로 시작하는 경로가 이 폴더로 펼쳐진다. 모바일은 바인딩 층이 앱의 `ssh/`를 넣는다)과 `embedded.home`(그 밖의 `~/`). 앱은 두 역할을 각각 준다: `embedded.ssh_dir`에는 `noBackupFilesDir/ssh`, `embedded.home`에는 앱 홈으로 쓸 `noBackupFilesDir` 아래 폴더. 이름은 확정된 설계를 따른다.
 
 제안:
 
+- 호스트 키 정책 보존: tasty-network 진행 중 설계(`6bad6ff` `ssh-backends.md`)의 `with_verify`는 `StrictHostKeyChecking=accept-new`를 사용자 config보다 먼저 적용하는 옵션이지만, `system-ssh` 쪽 런처(`SshConnector::with_launcher`)로만 받는다. 모바일 빌드는 `system-ssh`를 끄므로(2절 계약 4) 앱에는 이 옵션이 없다. ffi나 내장 백엔드가 같은 강제값을 둘 경우에도 앱은 쓰지 않고, 가져온 config의 `ask`를 포함해 프로필의 유효 호스트 키 정책을 그대로 둔다. config에 값이 없을 때의 기본값은 ④에서 정하되 config 값보다 앞에 두지 않는다. 진행 중 설계라 확정판에서 다시 본다.
 - 저장 배치(따로 적지 않은 것은 `filesDir` 아래. 비밀과 신뢰 기록은 모두 `noBackupFilesDir` 아래다):
 
   | 자리 | 내용 |
@@ -156,14 +156,14 @@
 정해진 것:
 
 - Git 정보(전제 4)는 원격에서 `git` 명령을 exec 채널로 실행해 읽는다.
-- 원격 Tasty 포트 발견도 exec 채널로 같은 원격 명령을 돌린다(진행 중 초안 "내장 백엔드의 경계"). 포트 발견은 transport 안에서 일어나고 앱은 설정값만 준다.
+- 원격 Tasty 포트 발견도 exec 채널로 같은 원격 명령을 돌린다(진행 중 초안 `bcbcfba` `mobile.md` "내장 백엔드의 경계"). 포트 발견은 transport 안에서 일어나고 앱은 설정값만 준다.
 
 제안:
 
-- 앱이 직접 쓰는 exec(Git용)는 tasty-network가 주는 exec API(#3)를 쓴다. 출력 상한, 시간 제한, 취소가 API에 있어야 한다. 포트 발견이 이미 쓰는 상한 규칙(stdout 64 KiB, stderr 16 KiB, 마감 하나, `repo-boundary.md` "포트 발견의 tasty 관례"@b103e90)과 같은 모양을 기대한다.
+- 앱이 직접 쓰는 exec(Git용)는 tasty-network가 주는 exec API(#3)를 쓴다. 출력 상한, 시간 제한, 취소가 API에 있어야 한다. 포트 발견이 이미 쓰는 상한·마감 규칙(정본: `tasty-net-ssh::discover_remote_port`와 `repo-boundary.md` "포트 발견의 tasty 관례"@b103e90)과 같은 모양을 기대한다.
 - Git 출력 해석은 Kotlin에 둔다. 본체는 git2로 로컬 저장소를 읽으므로(기획 초안 5절) CLI 출력 파서는 새로 필요하다. 다만 본체 `tasty-git-core`(`89efb5602`)에는 상태·로그·diff 결과 타입이 있다. 기획 3.2의 범위가 정해질 때, 같은 뜻의 필드는 그 결과 모델의 이름과 의미에 맞춘다(기획 초안 5절도 결과 타입 공유를 후보로 적는다).
 - 성공 출력은 Git의 기계 판독 형식(`status --porcelain=v2 -z`, `log`의 지정 형식 등)으로 받아 로캘과 특수문자 경로에 덜 기대게 한다. 읽기 전용 조회가 원격 인덱스를 고쳐 쓰지 않게 `git --no-optional-locks`를 붙인다(`status`는 기본으로 인덱스의 상태 캐시를 갱신해 쓸 수 있다).
-- 실패 분류: exec 결과는 종료 코드 말고도 종료 신호, 세션 손실, 종료 상태 미수신이 있다(`6bad6ff` `ssh-backends.md` "터널·exec·SFTP"). 그래서 "`git` 없음"은 종료 코드 하나로 정하지 않는다. 지원하는 원격 셸(POSIX sh, Windows PowerShell·cmd)마다 명령과 경로를 넘기는 방식과 `git` 설치 여부를 확인하는 명령을 따로 정한다. 포트 발견의 `detect_port_mode`는 성공한 발견 방식만 돌려주고 셸 자체는 판별하지 않으므로(`crates/tasty-net-ssh/src/discovery.rs`@b103e90), Git용 원격 셸 판정은 따로 둔다(프로필 값 또는 앱의 판정 명령). 저장소 판정은 한 번의 실패로 정하지 않고 셋을 따로 본다: (1) 저장소 발견 여부(대상 경로 접근 실패와 "저장소를 찾지 못함"을 나눈다), (2) 작업 트리가 필요한 기능(상태·diff)의 사용 가능 여부(bare 저장소나 `.git` 폴더 안에서는 `--is-inside-work-tree`가 `false`라 저장소는 있어도 그 기능만 비활성), (3) Git 실행 거부(`safe.directory` 등)와 일반 실행 실패. 판정 결과는 5.8의 시각적 피드백으로 보인다.
+- 실패 분류: exec 결과는 종료 코드 말고도 종료 신호, 세션 손실, 종료 상태 미수신이 있다(`6bad6ff` `ssh-backends.md` "터널·exec·SFTP"). 그래서 "`git` 없음"은 종료 코드 하나로 정하지 않는다. 지원하는 원격 셸(POSIX sh, Windows PowerShell·cmd)마다 명령과 경로를 넘기는 방식과 `git` 설치 여부를 확인하는 명령을 따로 정한다. 포트 발견의 `detect_port_mode`는 원격에 도달한 발견 방식(성공한 방식, 그리고 원격 인스턴스 종료 확정 `RemoteInstanceExited`를 보고한 방식도 포함. `detect_first_success`와 시험 `detect_port_mode_returns_the_mode_that_reported_an_exited_instance`)만 돌려주고 셸 자체는 판별하지 않으므로(`crates/tasty-net-ssh/src/discovery.rs`@b103e90), Git용 원격 셸 판정은 따로 둔다(프로필 값 또는 앱의 판정 명령). 저장소 판정은 한 번의 실패로 정하지 않고 셋을 따로 본다: (1) 저장소 발견 여부(대상 경로 접근 실패와 "저장소를 찾지 못함"을 나눈다), (2) 작업 트리가 필요한 기능(상태, 작업 트리·인덱스와의 미커밋 변경 비교)의 사용 가능 여부(bare 저장소나 `.git` 폴더 안에서는 `--is-inside-work-tree`가 `false`라 저장소는 있어도 그 기능만 비활성. 커밋 사이 비교와 기록은 bare에서도 된다), (3) Git 실행 거부(`safe.directory` 등)와 일반 실행 실패. 판정 결과는 5.8의 시각적 피드백으로 보인다.
 
 결정 대기: Git 정보로 보여 줄 범위(기획 초안 3.2, 사용자 몫).
 
@@ -185,19 +185,19 @@
 
 - 범위(U2): 1단계는 원격 Tasty의 워크스페이스 목록과 상태다. 화면 attach는 2단계다.
 - 경로(`identity.md` "토큰 전달"@b103e90, `transport.md` "채널 대응"·"요청 채널"@b103e90):
-  1. exec로 포트 발견. 원격의 연결 레코드(포트·토큰·인스턴스 ID)를 한 번에 읽는다. 기존 발견기와 레코드 파서를 그대로 쓴다. 명시 포트 파일 경로가 있으면 그것만 읽고, 없으면 `Auto`가 subcommand → Unix 파일 → Windows 파일 순으로 본다(`repo-boundary.md` "포트 발견의 tasty 관례"@b103e90). 숫자 포트만 오면(전환 전 Tasty) `SshTransport::connect`가 `ConnectError::PeerTooOld`(`evidence: PortOnlyDiscovery`)로 끝내고 다시 걸지 않는다. 연결한 뒤 v1 거절 ACK를 읽은 경우는 handshake의 `HandshakeError::PeerTooOld`(`evidence: V1Ack`)다(`crates/tasty-net-transport/src/ssh.rs`·`handshake.rs`@b103e90). FFI는 두 경로의 `evidence`를 보존한다.
+  1. exec로 포트 발견. 원격의 연결 레코드(포트·토큰·인스턴스 ID)를 한 번에 읽는다. 기존 발견기와 레코드 파서, 그 우선순위와 폴백 규칙을 그대로 쓴다(정본: `tasty-net-ssh::discover_remote_port`, `repo-boundary.md` "포트 발견의 tasty 관례"@b103e90). 숫자 포트만 오면(전환 전 Tasty) `SshTransport::connect`가 `ConnectError::PeerTooOld`(`evidence: PortOnlyDiscovery`)로 끝내고 다시 걸지 않는다. 연결한 뒤 v1 거절 ACK를 읽은 경우는 handshake의 `HandshakeError::PeerTooOld`(`evidence: V1Ack`)다(`crates/tasty-net-transport/src/ssh.rs`·`handshake.rs`@b103e90). FFI는 두 경로의 `evidence`를 보존한다.
   2. 로컬 루프백 포워딩 종단으로 `direct-tcpip` 터널.
   3. 채널마다 handshake v2. 첫 메시지의 `purpose`가 `attach`·`bulk`·`request` 중 하나다. `attach`·`request`는 토큰과 기기 서명으로 인증한다. `bulk`는 토큰과 부모 attach 링크가 발급한 자격을 내고 ACK를 받으며, 기기 서명을 다시 주고받지 않는다(`handshake.md` "상태 표"·"bulk 자격"@b103e90). 요청 채널은 attach 링크 없이 혼자 열 수 있다.
 - 토큰은 로그·UI에 내보내지 않는다.
 - 원격 Tasty 기기 키 신뢰 저장소(`PeerKeyStore`)는 소비자인 앱이 준다. 첫 등록은 `pin_if_absent` 한 번으로 원자적으로 정하고, 기록을 바꾸는 길은 사용자의 명시적 재등록(`reregister`) 하나다(`identity.md` "TOFU"@b103e90, `handshake.md` "검사 순서"@b103e90). 앱이 dialer로 키 바뀜을 발견하면 연결 시도는 `HandshakeError::PeerKeyMismatch { expected, got }`로 끝난다(`crates/tasty-net-transport/src/handshake.rs`@b103e90). `peer_key_mismatch`는 받는 쪽이 보내는 거절 사유 코드다.
-- 발견과 터널의 대상 일치(제안): 용도마다 config를 해석하므로(5.3) 포트 발견 exec와 터널의 실제 대상이 `Match`로 달라질 수 있다. v2는 상대 기기 서명을 확인하기 전 첫 메시지에 토큰을 싣는다. 그래서 발견한 레코드(토큰 포함)는 발견과 같은 유효 대상(호스트·포트·사용자·점프 홉)으로 가는 터널에만 쓴다. 두 해석의 유효 대상이 다르면 토큰을 보내기 전에 구성 오류로 끝낸다. 이 확인은 발견 결과로 터널을 만들거나 다시 쓰고 레코드의 토큰을 넣는 transport 경로(`crates/tasty-net-transport/src/ssh.rs`@b103e90)에서, 포트 발견과 터널 연결에 실제로 쓴 유효 대상을 비교하는 방식으로 하자고 요구한다. 연결 전 설정 점검(`inspect`)의 결과로는 실제로 쓴 대상을 보증하지 못한다. FFI는 불일치 오류를 그대로 넘긴다(#7).
 - 원격 쪽이 v2 연결 레코드를 게시하는 일은 tasty 몫이다. Android attach는 그 게시가 있는 tasty에만 붙는다.
 - 메서드와 응답은 tasty가 정한다(R3). 요청 채널은 운반만 한다(`transport.md` "요청 채널"@b103e90).
 - 1단계 메서드(R3 A): 읽기 전용 원자 메서드 `workspace.overview`. 응답 모양은 워크스페이스마다 `{id, name, subtitle, busy_count, mirror, ws_holder?, surfaces: [{id, kind, title, busy, holder?, granted_seq?}]}`와 capabilities다. 단일 서피스 점유는 `attach.list`의 `attached[]{surface_id, holder, granted_seq}`에 이미 있다. 크레이트 이름·sha를 받기 전에도 이 모양으로 Kotlin 모델을 가정해도 된다.
-- 도메인 타입(R3 B): attach 도메인 메시지와 descriptor의 serde 타입만 담은 tasty 크레이트. Android에서 빌드할 수 있다. 2단계(화면 attach)가 이 크레이트를 쓴다.
+- 도메인 타입(R3 B): attach 도메인 메시지와 descriptor의 serde 타입만 담은 tasty 크레이트. Android에서 빌드할 수 있다. 기존 크레이트를 쓰지 않고 새로 만드는 근거(tasty `a8c4d26f4d` 기준): 지금 그 타입이 있는 `tasty-ipc`는 rusqlite bundled·memory·telemetry·agent 의존을 함께 끌고 오고, `tasty-remote`는 ssh 전제다. 2단계(화면 attach)가 이 크레이트를 쓴다.
 
 제안:
 
+- 발견과 터널의 대상 일치: 용도마다 config를 해석하므로(5.3) 포트 발견 exec와 터널의 실제 대상이 `Match`로 달라질 수 있다. v2는 상대 기기 서명을 확인하기 전 첫 메시지에 토큰을 싣는다. 그래서 발견한 레코드(토큰 포함)는 발견과 같은 유효 대상(호스트·포트·사용자·점프 홉)으로 가는 터널에만 쓴다. 두 해석의 유효 대상이 다르면 토큰을 보내기 전에 구성 오류로 끝낸다. 이 확인은 발견 결과로 터널을 만들거나 다시 쓰고 레코드의 토큰을 넣는 transport 경로(`crates/tasty-net-transport/src/ssh.rs`@b103e90)에서, 포트 발견과 터널 연결에 실제로 쓴 유효 대상을 비교하는 방식으로 하자고 요구한다. 연결 전 설정 점검(`inspect`)의 결과로는 실제로 쓴 대상을 보증하지 못한다. FFI는 불일치 오류를 그대로 넘긴다(#7).
 - 기기 키: tasty-network identity의 `DeviceKey::load_or_create`를 `noBackupFilesDir/net/`(5.6) 아래 키 폴더로 부른다. 같은 폴더의 `device_key`를 다시 쓰므로 폴더가 바뀌면 새 기기 ID가 생긴다. 그래서 ②의 임시 export부터 이 최종 경로를 쓰고, ③에서 ffi의 `TastyNet` 생성 인자에도 같은 폴더를 넘긴다. 기기 키와 연결 레코드의 `File::lock` 동작은 다른 경로이므로, 기기 키 시험이 레코드 쪽 잠금을 증명하지 않는다(#9).
 - `PeerKeyStore` 구현: `net/peers/` 아래 상대마다 파일 하나. 저장 키(`PeerRef`)는 편집할 수 있는 Host 별명이 아니라 앱이 프로필마다 붙이는 바뀌지 않는 ID다(별명을 바꿔도 기록이 빠지지 않게). `pin_if_absent`는 기기 키 코드(`crates/tasty-net-identity/src/device_key.rs`@b103e90)와 같은 방식으로, 내용을 다 쓴 임시 파일을 `hard_link`로 게시한다. 경쟁에서 진 호출은 이미 확정된 ID를 읽어 `Existing`으로 돌려준다. 그래서 같은 상대에게 겹친 첫 연결에서도 `Inserted`는 하나다.
 - 키 바뀜 화면: 연결 상태 요약(`ConnectionTable`의 마지막 원인)이 아니라 연결 시도가 돌려준 구조화된 오류(`PeerKeyMismatch { expected, got }`)에서 두 키를 받아 보여 주고, 사용자가 확인하면 `reregister`를 부른다. b103e90의 연결 목록 요약은 이 오류를 문자열로 줄이므로 화면 근거로 쓰지 않는다(`connection_table/info.rs`@b103e90). 전환 전 Tasty 판정(`PortOnlyDiscovery`·`V1Ack`)도 같은 시도 오류에서 읽는다.
@@ -211,7 +211,7 @@
 결정 대기:
 
 - tasty: R3 (A)·(B)의 반영과 크레이트 이름·sha, `workspace.overview` 미지원을 가리는 오류 코드, 전환한 Tasty의 v2 레코드 게시.
-- 사용자: 대화형 원격 SSH 터미널(A2)은 U2가 정하지 않았다. 보류표에 그대로 남는다.
+- 사용자: 대화형 원격 SSH 터미널(기획 초안 4.2 "대화형 SSH 터미널을 넣는다" 행)은 U2가 정하지 않았다. 기획 초안 4.2의 열린 선택지로 남는다.
 
 ### 5.5 권한
 
@@ -221,7 +221,7 @@
 
 - `INTERNET`: 모든 원격 연결에 필요하다.
 - `ACCESS_NETWORK_STATE`: 망 상태를 구독해 `AppEvent::NetworkChanged`·`NetworkLost`(5.7)를 만들 때 필요하다.
-- LAN 직접 접속 권한: Android 17을 대상으로 하는 앱은 같은 망 기기에 직접 접속할 때 런타임 권한(`ACCESS_LOCAL_NETWORK`)이 필요하고, Rust 소켓에도 적용된다고 알려져 있다. 권한 이름과 조건은 작업 시점 Android 문서로 다시 확인한다. 이 권한은 Android 17 이상에서 SDK 37 이상을 대상으로 하는 앱의 직접 LAN 소켓 연결에 적용된다. 첫 원격 연결이 인터넷 대상일 수 있으므로, 요청은 직접 LAN 연결을 할 때로 좁힌다. 판정은 config의 문자열이 아니라 실제 첫 SSH 홉(`ProxyJump`가 있으면 첫 점프 호스트)의 이름 풀이 결과로 한다. 풀이 결과가 사설·링크 로컬 범위면 LAN 연결이다. 다만 Android 17에서는 `.local` 이름 풀이 자체에 LAN 권한이 필요할 수 있어, 권한 없이 풀이부터 하면 주소를 얻기 전에 막히고 소켓 FD로 진단할 수도 없다. 그래서 유효 설정의 첫 SSH 홉이 `.local`이면 이름 풀이 전에 권한을 확인하고 요청한다. 이 판정은 Rust 안(이름 풀이 뒤)에서 일어나므로 그 결과와 차단 사유를 FFI 오류로 받는 길이 필요하다(6절 #14). 거절했거나 회수됐으면 설정으로 가는 길을 준다.
+- LAN 직접 접속 권한: Android 17을 대상으로 하는 앱은 같은 망 기기에 직접 접속할 때 런타임 권한(`ACCESS_LOCAL_NETWORK`)이 필요하고, Rust 소켓에도 적용된다고 알려져 있다. 권한 이름과 조건은 작업 시점 Android 문서로 다시 확인한다. 이 권한은 Android 17 이상에서 SDK 37 이상을 대상으로 하는 앱의 직접 LAN 소켓 연결에 적용된다. 첫 원격 연결이 인터넷 대상일 수 있으므로, 요청은 직접 LAN 연결을 할 때로 좁힌다. 판정은 config의 문자열이 아니라 실제 첫 SSH 홉(`ProxyJump`가 있으면 첫 점프 호스트)의 이름 풀이 결과로 한다. 풀이 결과가 사설·링크 로컬 범위면 LAN 연결이다. 다만 Android 17에서는 `.local` 이름 풀이 자체에 LAN 권한이 필요할 수 있어, 권한 없이 풀이부터 하면 주소를 얻기 전에 막히고 소켓 FD로 진단할 수도 없다. 그래서 유효 설정의 첫 SSH 홉이 `.local`이면 이름 풀이 전에 권한을 확인하고 요청한다. 이 판정은 Rust 안(이름 풀이 뒤)에서 일어나므로 그 결과와 차단 사유를 FFI 오류로 받는 길이 필요하다(6절 #14). 거절했거나 회수됐으면 소켓을 열지 않고 그 사유로 끝내며(5.8, #14 (a)) 설정으로 가는 길을 준다.
 - 차단 진단: 권한이 없다는 상태와 TCP 시간 초과만으로는 LAN 차단이라고 확정할 수 없다. Android 문서가 실패한 TCP 소켓의 FD로 차단 사유를 읽는 NDK API를 준다. FFI 오류로 바뀐 뒤에는 그 FD가 남아 있다는 보장이 없으므로, 진단은 소켓을 가진 Rust 계층이 소켓을 닫기 전에 하고 결과를 오류에 싣는다. 그 API는 `minSdk 29`보다 새 Android에만 있으므로, OS 판과 심벌 가용성을 실행 중에 확인하는 호출 경계(약한 심벌 또는 동적 조회)로 부르고 API 29 빌드를 유지한다. 이 진단을 tasty-network 소켓 안에서 할지, 앱이 소켓 생성 훅을 줄지는 #14의 확인 항목이다.
 
 결정 대기: 없음.
@@ -252,13 +252,9 @@
   - (b) attach 없이 쓰는 일반 SSH 세션(Explorer·Git용). b103e90의 `ConnectionTable`에는 이 단위가 없다. 같은 상태 API로 볼 수 있게 해 달라는 것이 새 요구다(#6b).
 - 화면이 쓰는 값: 연결 목록, 실패 사유, 다시 시도할 수 있는지(`is_retryable()`), 재시도 대기 표시. 이벤트는 `EventStream::next(timeout)`으로 끌어오고, 이벤트가 유실되면(`Lagged`) 스냅샷을 다시 읽는다.
 - 앱 수명 알림: 앱의 앞·뒤 전환과 망 바뀜·끊김을 `AppEvent`(`Foreground`·`Background`·`NetworkChanged`·`NetworkLost`)로 라이브러리에 넘긴다. 앱이 앞으로 돌아오면 상태 화면이 재연결 상태를 보인다.
-- U5(앞에 있을 때만 유지)를 앱이 지키는 방법: `Background`를 넘긴 뒤 앱이 직접 정리한다.
-  - 새 작업을 막는다: 백그라운드 동안 저장소 객체는 새 연결·호출을 받지 않는다.
-  - 진행 중인 연결 시도는 취소하고, 떠 있는 `SshPrompt`는 거절로 답한다.
-  - 열어 둔 exec·SFTP 핸들, 터널·링크, 요청 채널(`RequestClient`)을 닫는다. b103e90의 `RequestClient`는 따로 닫는 핸들을 주고, 그냥 drop하면 종료 응답을 기다릴 수 있으므로(`request.rs`@b103e90) 닫는 핸들로 닫는다.
-  - 취소한 뒤 늦게 성공해 돌아온 핸들은 받는 즉시 닫고 화면에 넘기지 않는다.
-  - 정리 시점(바로 / 짧은 유예 뒤)은 ④에서 정한다.
-- 복귀 때 다시 여는 소유권: 진행 중 설계의 `Foreground`는 라이브러리가 멈춰 둔 재연결을 다시 시작할 뿐이고, 앱이 닫은 세션·요청 채널에는 재연결 예약이 없다. 그래서 앱의 저장소 객체가 화면에 계속 필요한 연결 대상(열린 Explorer·Git 화면의 Host, 원격 Tasty 목록 화면의 대상)을 기억하고, 복귀 때 그 대상을 다시 연다. 라이브러리에 재연결 예약이 이미 있는 대상(앱이 닫지 않은 터널 등)은 그 예약을 쓰고 앱이 따로 열지 않아 중복 시도를 피한다.
+- U5(앞에 있을 때만 유지)를 앱이 지키는 방법은 한 가지다: 앱이 `Background`를 받으면 앱이 관리하는 연결을 모두 바로 닫고, `Foreground`를 받으면 앱이 기억한 대상을 앱이 다시 연다. 백그라운드 동안 열어 두는 연결은 없다.
+  - 닫을 때: 저장소 객체는 새 연결·호출을 받지 않는다. 진행 중인 연결 시도는 취소하고, 떠 있는 `SshPrompt`는 거절로 답한다. 열어 둔 exec·SFTP 핸들, 터널·링크, 요청 채널(`RequestClient`)을 닫는다. b103e90의 `RequestClient`는 따로 닫는 핸들을 주고, 그냥 drop하면 종료 응답을 기다릴 수 있으므로(`request.rs`@b103e90) 닫는 핸들로 닫는다. 취소한 뒤 늦게 성공해 돌아온 핸들은 받는 즉시 닫고 화면에 넘기지 않는다.
+  - 다시 열 때: 앱이 모두 닫았으므로 라이브러리에는 그 대상의 재연결 예약이 남지 않는다(진행 중 설계의 `Foreground`는 라이브러리가 멈춰 둔 재연결만 다시 시작한다). 앱의 저장소 객체가 닫기 전에 화면에 필요했던 대상(열린 Explorer·Git 화면의 Host, 원격 Tasty 목록 화면의 대상)을 기억해 두었다가 다시 열고, 원격 Tasty 목록은 다시 읽는다(5.4).
 - 앱 수명 이벤트를 라이브러리에 넘기는 일과 이 정리는 ⑥ 상태 화면을 기다리지 않고 핸들을 처음 여는 ④·⑤에서 만든다. ⑥은 그 결과를 모아 보이는 화면이다(8절).
 
 결정 대기: tasty-network가 #6b를 받을지와 그 모양.
@@ -271,7 +267,7 @@
 |---|---|---|
 | 원격에 `git`이 없다 | 5.2 | 원격 셸별 설치 확인 명령의 결과(종료 코드 하나로 정하지 않는다) |
 | 대상 폴더가 git 저장소가 아니다 | 5.2 | 저장소를 찾지 못함. 경로 접근 실패, `safe.directory` 거부, 일반 실패, 종료 신호, 세션 손실과 나눈다 |
-| 저장소는 있지만 작업 트리가 없다(bare 등) | 5.2 | 작업 트리 판정 `false`. 상태·diff만 비활성으로 보인다 |
+| 저장소는 있지만 작업 트리가 없다(bare 등) | 5.2 | 작업 트리 판정 `false`. 상태와 미커밋 변경 비교만 비활성으로 보이고, 기록과 커밋 사이 비교는 그대로 쓴다 |
 | SFTP 서브시스템이 꺼져 있거나 서버가 거절했다 | 5.3 | 꺼짐을 단정할 근거가 있는 경우와 subsystem 요청 거절(사유 모름)을 나눈다(#4) |
 | 권한이 없다 | 5.3 | SFTP 실패 사유 "권한 없음"(#4) |
 | 원격 Tasty가 없거나 실행 중이 아니다 | 5.4 | 포트 발견 실패(원격 인스턴스 없음·종료), 원격 리스너 없음 |
@@ -280,12 +276,13 @@
 | 원격 Tasty가 기능을 지원하지 않는다 | 5.4 | `RequestError::Remote`의 tasty가 정한 미지원 코드, `workspace.overview` capabilities에 값 없음 |
 | 원격 목록이 너무 크다 | 5.4 | `RequestError::ResponseTooLarge`. "응답이 너무 큼"으로 보이고 빈 목록·미지원으로 읽지 않는다 |
 | 원격 Tasty 기기 키가 바뀌었다 | 5.4 | 연결 시도 오류 `HandshakeError::PeerKeyMismatch { expected, got }` |
-| LAN 권한이 없다 | 5.5 | 소켓 차단 사유(6절 #14) |
+| LAN 권한을 거절했거나 회수됐다(연결 전) | 5.5 | 앱의 권한 요청·확인 결과. 소켓을 열기 전이라 차단 사유를 읽을 소켓이 없다 |
+| LAN 연결이 권한 때문에 막혔다(연결 중) | 5.5 | 소켓을 닫기 전에 읽은 차단 사유(6절 #14) |
 | 망이 없다 | 5.7 | `NetworkLost` |
 
 ## 6. tasty-network 요구 목록 (NEEDS-REPO R2)
 
-R2 처리 결과: 아래 표 #1~#11 전체를 tasty-network에 전달했다(2026-11-27). "원래 상태"는 R2 전에 tasty-network 쪽에 무엇이 있었는지다. R2 전의 요구는 exec(표준 입출력·종료 상태)와 SFTP 지원, 같은 세션 위에서 함께 쓰는 경계까지였고, 그 위의 세부 API(출력 상한·시간 제한·취소·env, 범위 읽기, 실패 분류 등)는 R2가 구체화했다. "후속 작업 문서" 열은 tasty-network의 내장 SSH 작업·ffi 작업 문서에 그 항목이 직접 적혀 있는지(있음), 전달 기록으로만 확인되는지(전달 기록)다.
+R2 처리 결과: 아래 첫 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다(2026-11-27). 이 문서가 더한 것(#7 행의 둘째 칸 확인 항목, 아래 둘째 표 #12~#15)은 아직 전달 전이다. "원래 상태"는 R2 전에 tasty-network 쪽에 무엇이 있었는지다. R2 전의 요구는 exec(표준 입출력·종료 상태)와 SFTP 지원, 같은 세션 위에서 함께 쓰는 경계까지였고, 그 위의 세부 API(출력 상한·시간 제한·취소·env, 범위 읽기, 실패 분류 등)는 R2가 구체화했다. "후속 작업 문서" 열은 tasty-network의 내장 SSH 작업·ffi 작업 문서에 그 항목이 직접 적혀 있는지(있음), 전달 기록으로만 확인되는지(전달 기록)다.
 
 | # | 항목 | 앱이 쓰는 곳 | 원래 상태 / 후속 작업 문서 |
 |---|---|---|---|
@@ -296,7 +293,8 @@ R2 처리 결과: 아래 표 #1~#11 전체를 tasty-network에 전달했다(2026
 | 5 | SFTP 쓰기(쓰기·이름 바꾸기·삭제) | 기획 4.4 결정 뒤 | 보류 / 보류로 있음 |
 | 6 | 한 SSH 세션을 터널·exec·SFTP가 함께 쓰는 경계 | 5.3, 5.7 | 이미 요청됨 / 있음 |
 | 6b | attach 없이 쓰는 일반 SSH 세션의 수명·끊김 이벤트를 `ConnectionTable`과 같은 상태 API로 보기 | 5.7 | 새 / 있음 |
-| 7 | 원격 Tasty attach 경로: exec 포트 발견 → `direct-tcpip` → handshake v2 → `attach`·`request`·`bulk` 채널. 채널 위 프레임 읽기·쓰기를 FFI로 노출(도메인 해석은 앱·tasty 쪽). 토큰은 FFI 밖 로그·UI·오류·Debug 출력에 내지 않는다. 이 문서가 더한 확인 항목: 1단계용으로 `RequestClient`(호출·닫는 핸들)를 감싸 노출, 상대 `caps`(`net.request`)를 앱이 볼 수 있게, `RequestError::ResponseTooLarge`·두 `PeerTooOld` 경로의 `evidence` 보존, 발견과 터널의 유효 대상 일치를 transport 경로에서 확인하고 불일치를 오류로 넘기기 | 5.4 | 경로는 설계에 있음. FFI 노출 범위는 새 / 있음 |
+| 7 | 원격 Tasty attach 경로: exec 포트 발견 → `direct-tcpip` → handshake v2 → `attach`·`request`·`bulk` 채널. 채널 위 프레임 읽기·쓰기를 FFI로 노출(도메인 해석은 앱·tasty 쪽). 토큰은 FFI 밖 로그·UI·오류·Debug 출력에 내지 않는다 | 5.4 | 경로는 설계에 있음. FFI 노출 범위는 새 / 있음 (전달됨) |
+| 7+ | #7에 이 문서가 더한 확인 항목: 1단계용으로 `RequestClient`(호출·닫는 핸들)를 감싸 노출, 상대 `caps`(`net.request`)를 앱이 볼 수 있게, `RequestError::ResponseTooLarge`·두 `PeerTooOld` 경로의 `evidence` 보존, 발견과 터널의 유효 대상 일치를 transport 경로에서 확인하고 불일치를 오류로 넘기기 | 5.4 | 새 / 아직 전달 전 |
 | 7b | `PeerKeyStore`(앱이 구현하는 신뢰 저장소)의 FFI 경계: 앱이 구현하는 콜백 인터페이스, 최초 등록 원자성, 사용자 재등록 | 5.4 | 새 / 있음 |
 | 8 | 연결 목록·사유·`is_retryable()`·`EventStream::next(timeout)`·`AppEvent` | 5.7 | 진행 중 초안에 있음 / 있음 |
 | 9 | identity: 앱이 준 폴더의 기기 키 만들기·읽기. `File::lock`이 Android에서 잠그는지는 연결 레코드 경로의 문제라 따로 확인한다 | 5.4 | 기기 키는 있음. `File::lock` 확인은 새 / 있음 |
@@ -305,14 +303,14 @@ R2 처리 결과: 아래 표 #1~#11 전체를 tasty-network에 전달했다(2026
 
 R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdylib에 링크돼도 동작할 것, UniFFI 판을 앱과 맞출 것.
 
-이 문서를 쓰며 새로 찾은 확인 항목(아직 전달 전):
+이 문서를 쓰며 새로 찾은 확인 항목(모두 아직 전달 전):
 
 | # | 항목 | 앱이 쓰는 곳 |
 |---|---|---|
 | 12 | 라이브러리 모드에서 `tasty-net-ffi` 생성 Kotlin의 패키지 이름과, 앱이 그것을 덮어쓸 필요가 있는지 | 2절 |
 | 13 | #2의 메모리 키를 config의 `IdentityFile` 참조와 잇는 규칙(5.1 제안), `IdentitiesOnly`와 함께 쓸 때의 조건, 고른 메모리 자격이 세션 재사용 키에 들어가는지 | 5.1, 5.3 |
-| 14 | 직접 LAN 연결 판정(첫 SSH 홉의 이름 풀이 결과)과, Android 권한으로 막혔을 때 소켓을 닫기 전에 읽은 차단 사유를 FFI 오류로 따로 받는 길. API 29 빌드를 유지하는 호출 경계 | 5.5 |
-| 15 | 모바일 의존 쪽 검사(`system-ssh`, `tokio`의 `process`, `russh-config`)를 앱의 최종 그래프에서도 같은 조건으로 돌릴 수 있게 검사 기준을 공개 문서로 내는 것 | 7절 |
+| 14 | 직접 LAN 연결 판정(첫 SSH 홉의 이름 풀이 결과, `.local`은 풀이 전)과, 두 사유를 FFI 오류로 따로 받는 길: (a) 소켓을 열기 전 앱의 권한 거절·회수로 연결을 시작하지 않음, (b) 연결 중 Android 권한으로 막혔을 때 소켓을 닫기 전에 읽은 차단 사유. API 29 빌드를 유지하는 호출 경계 | 5.5 |
+| 15 | 모바일 의존 쪽 검사(`6bad6ff` `mobile.md` "의존 쪽 검사")를 앱의 최종 그래프에서도 같은 조건으로 돌릴 수 있게 검사 기준을 공개 문서로 내는 것 | 7절 |
 
 ## 7. CI 계획
 
@@ -330,7 +328,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 - 호스트 bindgen: `uniffi-bindgen` 실행도 `--locked`다(지금 그렇다). 4절 입력 보강 뒤에는 생성기 크레이트·`uniffi.toml`·`Cargo.lock`·툴체인 파일이 바뀌면 다시 생성하고, ABI·NDK 판이 바뀌면 생성에 쓰는 첫 ABI `.so`의 내용이 바뀔 때만 다시 생성한다.
 - Rust 캐시: `Swatinem/rust-cache@v2`는 기본 설정에서 Cargo의 git 의존 캐시(tasty-network, tasty), 설치된 실행 파일과 설치 기록을 캐시한다(그 action의 문서 "Cache Details"). 다만 지금 순서는 `cargo install cargo-ndk`가 캐시 복원보다 앞에 있어 매번 다시 컴파일한다. 캐시 복원을 앞으로 옮기고, 복원 뒤 `cargo-ndk --version`이 고정한 `4.1.2`인지 확인해 다를 때만 설치한다.
 - Android target 검사: 지금 `clippy`는 호스트 target만 본다. `cfg(target_os = "android")` 코드와 tasty-network의 모바일 feature 조합을 보려면 Android target 하나(`aarch64-linux-android`)로 `clippy`를 한 번 더 돌린다. C 코드가 있는 의존(`ring`)은 NDK clang이 필요하므로 cargo-ndk를 거쳐 돌린다.
-- 모바일 의존 확인: 2절 계약 4를 CI에서 본다. 최종 Android 일반 의존 그래프(빌드·dev 의존 제외)에서 세 조건을 함께 확인하는 단계를 둔다: `tasty-net-ssh`의 `system-ssh` feature 없음, `tokio`의 `process` feature 없음, `russh-config` 크레이트 없음. tasty-network 진행 중 초안의 "의존 쪽 검사"와 같은 조건이다(6절 #15). Cargo는 같은 의존에 여러 경로가 켠 feature를 합치므로, 검사는 tasty-network 크레이트만 따로 풀지 않고 실제 배포 빌드(`tasty-mobile-core`, Android target, release)의 앱 전체 일반 의존 그래프에서 본다. 앱의 `tasty-terminal`이 쓰는 `portable-pty`는 다른 프로그램 실행 금지의 적용 범위 밖이라는 예외(2절)일 뿐, 위 세 조건은 앱 전체 그래프에 그대로 적용한다.
+- 모바일 의존 확인: 2절 계약 4를 CI에서 본다. tasty-network 진행 중 초안(`6bad6ff` `mobile.md` "의존 쪽 검사")과 같은 조건을 최종 Android 일반 의존 그래프에서 확인하는 단계를 둔다. 그 초안은 아직 공개 원격에 없으므로(1절) 요약만 적는다: 다른 프로그램 실행으로 이어지는 feature·크레이트(`system-ssh` 등)가 그래프에 없어야 한다. 조건의 정본은 그 절이고, 공개 기준을 요구한다(6절 #15). Cargo는 같은 의존에 여러 경로가 켠 feature를 합치므로, 검사는 tasty-network 크레이트만 따로 풀지 않고 실제 배포 빌드(`tasty-mobile-core`, Android target, release)의 앱 전체 일반 의존 그래프에서 본다. 앱의 `tasty-terminal`이 쓰는 `portable-pty`는 다른 프로그램 실행 금지의 적용 범위 밖이라는 예외(2절)일 뿐, 의존 쪽 검사 조건은 앱 전체 그래프에 그대로 적용한다.
 - 시간: 두 ABI release 빌드(`lto = "thin"`, `codegen-units = 1`)에 tasty-network 의존(`ring`, russh 등)이 더해진다. 첫 CI 실행 시간을 재고 `timeout-minutes: 30`을 그 값으로 다시 정한다.
 - 라이선스: 앱 `.so`에 UniFFI 런타임(MPL-2.0)이 링크되고 JNA를 싣는다. `rust/`에 `cargo deny`를 둔다. 허용 목록은 tasty-network `deny.toml`@b103e90에서 시작하되 그대로 쓰지 않는다. (1) tasty-network의 OpenSSH 이식 후속 결정은 이식 크레이트에 `BSD-2-Clause AND ISC AND SSH-short`를 요구하는데 b103e90 허용 목록에는 `SSH-short`가 없다. 앱이 실제로 링크하는 판의 라이선스로 목록을 정한다. (2) 그 정책 파일은 crates.io 밖 git 출처를 거절한다(`unknown-git = "deny"`). 앱은 tasty와 tasty-network를 git으로 받으므로 두 출처를 `allow-git`에 적는다.
 - 고지: 배포 경로와 별개로, 앱이 싣는 코드의 고지 항목(OpenSSH 이식 코드의 저작권 표시, UniFFI·JNA 라이선스)을 목록으로 둔다. 고지를 보이는 화면의 모양은 배포 경로(기획 4.9)를 정할 때 정한다.
@@ -348,10 +346,10 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 | ①′ 터미널 브랜치 반영 | `work/android-terminal`을 develop 위로 올리고 CI 4단계와 Rust 검사를 돌려 반영한다 | ①, U1 |
 | ② Rust 연결 기반 | tasty-network develop rev 고정(`b103e90`). 앱 cdylib의 임시 export(3절)로 `noBackupFilesDir/net/` 아래 최종 키 폴더(5.4)에 기기 키를 만들고 읽고 기기 ID를 돌려준다. 두 ABI `.so`와 생성 Kotlin | ①′, 이 계획의 검증. b103e90의 transport는 시스템 ssh 크레이트에 늘 의존하므로 이 단계는 identity만 의존한다. 이미 있는 증거(b103e90 크레이트의 `aarch64-linux-android` `cargo check`)와 이 단계가 새로 내야 할 증거(두 ABI에서 API 29로 앱 링크, 기기·에뮬레이터 위 실행)를 나눈다 |
 | ③ ffi로 교체 | `tasty-net-ffi`가 생기면 그것을 rlib으로 링크하고 ②의 임시 export를 지운다. ②와 같은 키 폴더를 넘겨 기기 ID를 유지한다. UniFFI 판을 맞추고 scaffolding 재노출(2절)을 붙인다 | tasty-network: transport ssh feature 분리, 내장 SSH(exec·SFTP), ssh-config 이식, ffi 크레이트, UniFFI 판 고정. 진행 중 초안의 ffi 의존에는 `tasty-net-p2p`가 들어 있으므로, 그 구성이 유지되면 p2p 크레이트의 반영도 선행이다 |
-| ④ SSH 프로필 + exec + SFTP 읽기 | 5.1~5.3. 프로필 파일·키 생성과 가져오기, Git 정보, Explorer 읽기. 앱 수명 이벤트 연결(`AppEvent`), 백그라운드 정리(5.7), LAN 권한 경로(5.5)를 함께 만든다 | ③, #2·#3·#4·#6·#14. 화면 범위는 Git 정보 범위(기획 3.2)·뷰어(기획 3.3)의 사용자 결정 |
+| ④ SSH 프로필 + exec + SFTP 읽기 | 5.1~5.3. 프로필 파일·키 생성과 가져오기, Git 정보, Explorer 읽기. 앱 수명 이벤트 연결(`AppEvent`), 백그라운드 정리(5.7), LAN 권한 경로(5.5)를 함께 만든다 | ③, #1·#2·#3·#4·#6·#13·#14. 화면 범위는 Git 정보 범위(기획 3.2)·뷰어(기획 3.3)의 사용자 결정 |
 | ⑤-1 원격 Tasty 목록·상태 | 5.4 1단계. 링크·요청 채널의 백그라운드 정리(5.7)를 함께 만든다 | 모델·호출부 개발: ④, #7·#7b(R3 답의 응답 모양으로 시작, 어느 tasty 반영도 기다리지 않는다). 실제 목록 연동: tasty R3 (A) `workspace.overview` 반영, v2 레코드 게시, tasty 전환과 같은 tasty-network 태그 |
 | ⑤-2 화면 attach | 5.4 2단계 | ⑤-1, tasty R3 (B) 반영(도메인 메시지·descriptor 타입), tasty mirror 계약 |
-| ⑥ 연결 상태 | 5.7. 두 층 상태 화면(앱 수명 이벤트 연결과 백그라운드 정리는 ④·⑤에서 이미 만든다) | ③, #6b·#8 |
+| ⑥ 연결 상태 | 5.7. 두 층 상태 화면(앱 수명 이벤트 연결과 백그라운드 정리는 ④·⑤에서 이미 만든다) | 화면 개발: ③, #6b·#8. 통합 검증(두 층을 실제로 모아 확인): ④(일반 SSH 세션), ⑤-1(Tasty 요청 연결) |
 
 - ④~⑥의 구현 TODO는 각 선행이 풀릴 때 이 표를 기준으로 만든다.
 - 기본 상태 표시(연결 중·끊김)는 ④·⑤에서 각 화면이 먼저 갖고, ⑥이 두 층을 모은 상태 화면을 만든다.
