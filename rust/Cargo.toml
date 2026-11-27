@@ -16,7 +16,7 @@ termwiz = "0.22"
 # Device key and device ID of the Tasty network. Pinned to a pushed develop commit of
 # github.com/zilhak/tasty-network until it tags an Android release; bump the rev on purpose
 # and keep Cargo.lock in step.
-tasty-net-identity = { git = "https://github.com/zilhak/tasty-network", rev = "130c5d46a59e7fb05b598ae2eb5ff5c77fda0005" }
+tasty-net-identity = { git = "https://github.com/zilhak/tasty-network", rev = "e656c21a18b3fcd75d3aadbf0817515b75dbb0ed" }
 
 [profile.release]
 lto = "thin"
