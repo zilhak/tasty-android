@@ -177,6 +177,7 @@
 - subsystem 실패: SSH의 subsystem 요청 실패 응답은 서버가 SFTP를 껐는지까지 알려 주지 않는다(RFC 4254 6.5). 그래서 "SFTP 꺼짐"이라고 단정할 근거가 있는 경우와 "서버가 SFTP 요청을 거절함(사유 모름)"을 나눠 보인다.
 - 세션 공유(#6): 진행 중 설계는 용도(터널·포트 발견·exec·SFTP)마다 config를 해석하고, 해석 결과의 연결 값 묶음(세션 키)이 같을 때만 세션 하나를 나눠 쓴다. `Match command`·`Match sessiontype`으로 용도마다 대상이나 키가 달라지면 같은 Host 별명이라도 세션이 둘이다. 세션은 그 위 핸들(터널·exec·SFTP)이 하나라도 살아 있는 동안 유지되고 마지막 핸들이 닫히면 닫힌다. 앱은 같은 Host의 Explorer와 Git 화면이 대개 한 세션을 쓴다고 기대하되, 화면 수명과 핸들 수명을 맞춰 쓰지 않는 핸들을 닫는다.
 - 경로 문법: Explorer의 경로 잇기와 부모 구하기는 원격 Tasty가 descriptor에 알리는 `path_syntax`(`Posix`·`Windows`, 5.4)를 따른다. 경로 모양(드라이브 문자, 구분자)으로 원격 OS를 추정하지 않는다.
+- 원격 Tasty가 없는 Host(SFTP만 쓰고 descriptor가 없음): Explorer는 SFTP 경로 문법을 쓴다. SFTP 프로토콜의 파일 이름은 `/`를 디렉터리 구분자로 쓰고, `/`로 시작하면 절대 경로, 그 밖은 사용자 기본 폴더 기준이며, `..`은 부모 폴더다([draft-ietf-secsh-filexfer-02](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) 6.2 "File Names"). Windows OpenSSH의 SFTP 서버도 Windows 경로를 `/`로 시작하는 `/C:/...` 꼴로 준다(PowerShell/openssh-portable `latestw_all` 브랜치 `contrib/win32/win32compat/misc.c`의 `realpath`: 앞에 `/`를 붙이고 구분자를 `/`로 바꾼다, 주석 "/x:/users/test1 format"). 그래서 경로 잇기와 부모 구하기는 SFTP 경로 규칙으로 하고, 이때도 OS를 추정하지 않는다.
 
 결정 대기: 쓰기(쓰기·이름 바꾸기·삭제, #5)는 기획 초안 4.4(편집 범위, 사용자 몫)가 정해진 뒤.
 
