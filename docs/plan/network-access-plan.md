@@ -169,6 +169,8 @@
 - 앱이 직접 쓰는 exec(Git용)는 tasty-network가 주는 exec API(#3)를 쓴다. 출력 상한, 시간 제한, 취소가 API에 있어야 한다. 포트 발견이 이미 쓰는 상한·마감 규칙(정본: `tasty-net-ssh::discover_remote_port`와 `repo-boundary.md` "포트 발견의 tasty 관례"@b103e90)과 같은 모양을 기대한다.
 - Git 출력 해석은 Kotlin에 둔다. 본체는 git2로 로컬 저장소를 읽으므로(기획 초안 5절) CLI 출력 파서는 새로 필요하다. 다만 본체 `tasty-git-core`(`89efb5602`)에는 상태·로그·diff 결과 타입이 있다. 기획 3.2의 범위가 정해질 때, 같은 뜻의 필드는 그 결과 모델의 이름과 의미에 맞춘다(기획 초안 5절도 결과 타입 공유를 후보로 적는다).
 - 성공 출력은 Git의 기계 판독 형식(`status --porcelain=v2 -z`, `log`의 지정 형식 등)으로 받아 로캘과 특수문자 경로에 덜 기대게 한다. 읽기 전용 조회가 원격 인덱스를 고쳐 쓰지 않게 `git --no-optional-locks`를 붙인다(`status`는 기본으로 인덱스의 상태 캐시를 갱신해 쓸 수 있다).
+- worktree 목록(U6): `git --no-optional-locks worktree list --porcelain -z`로 읽는다. porcelain 형식은 worktree마다 `worktree <경로>`로 시작하는 묶음이고, `HEAD <sha>`, `branch <ref>` 또는 `detached`, 그리고 `bare`·`locked`·`prunable` 표지가 붙을 수 있다. `-z`는 줄 끝을 NUL로 바꿔 경로에 줄바꿈이 있어도 나눌 수 있게 한다(Git 문서 `git-worktree` "Porcelain Format"). 화면에는 개수, 경로, 브랜치(`branch`의 짧은 이름, `detached`면 HEAD의 짧은 sha), 경로가 사라진 worktree(`prunable`)를 보인다. `-z`는 비교적 새 Git에만 있으므로(지원 판은 작업 시점 Git 문서로 확인한다) 원격 Git이 `-z`를 모르면 `--porcelain`만으로 다시 읽고, 그때는 줄바꿈이 든 경로를 나눌 수 없다고 보인다. worktree 경로는 원격 Git이 주는 경로 그대로이므로 Explorer로 열 때는 SFTP 경로 규칙(5.3)으로 바꾼다. Windows 원격에서 Git 경로(`C:/...`)와 SFTP 경로(`/C:/...`)를 잇는 규칙은 ④에서 실제 출력으로 확인한다.
+- 읽기만 한다는 범위를 지키려고, diff와 log에는 `--no-ext-diff`·`--no-textconv`·`--no-color`를 붙여 저장소 설정의 외부 diff·변환 프로그램이 원격에서 돌지 않게 하고 색 코드 없는 출력을 받는다. 큰 diff는 exec 출력 상한(#3)으로 자르고, 잘린 사실을 보인다.
 - 실패 분류: exec 결과는 종료 코드 말고도 종료 신호, 세션 손실, 종료 상태 미수신이 있다(develop `558d4c7` `ssh-backends.md` "터널·exec·SFTP"). 그래서 "`git` 없음"은 종료 코드 하나로 정하지 않는다. 지원하는 원격 셸(POSIX sh, Windows PowerShell·cmd)마다 명령과 경로를 넘기는 방식과 `git` 설치 여부를 확인하는 명령을 따로 정한다. 포트 발견의 `detect_port_mode`는 원격에 도달한 발견 방식(성공한 방식, 그리고 원격 인스턴스 종료 확정 `RemoteInstanceExited`를 보고한 방식도 포함. `detect_first_success`와 시험 `detect_port_mode_returns_the_mode_that_reported_an_exited_instance`)만 돌려주고 셸 자체는 판별하지 않으므로(`crates/tasty-net-ssh/src/discovery.rs`@b103e90), Git용 원격 셸 판정은 따로 둔다(프로필 값 또는 앱의 판정 명령). 저장소 판정은 한 번의 실패로 정하지 않고 셋을 따로 본다: (1) 저장소 발견 여부(대상 경로 접근 실패와 "저장소를 찾지 못함"을 나눈다), (2) 작업 트리가 필요한 기능(상태, 작업 트리·인덱스와의 미커밋 변경 비교)의 사용 가능 여부(bare 저장소나 `.git` 폴더 안에서는 `--is-inside-work-tree`가 `false`라 저장소는 있어도 그 기능만 비활성. 커밋 사이 비교와 기록은 bare에서도 된다), (3) Git 실행 거부(`safe.directory` 등)와 일반 실행 실패. 판정 결과는 5.8의 시각적 피드백으로 보인다.
 
 결정 대기: 없음. Git 정보로 보여 줄 범위(기획 초안 3.2)는 U6으로 정해졌다.
@@ -282,6 +284,8 @@
 | 원격에 `git`이 없다 | 5.2 | 원격 셸별 설치 확인 명령의 결과(종료 코드 하나로 정하지 않는다) |
 | 대상 폴더가 git 저장소가 아니다 | 5.2 | 저장소를 찾지 못함. 경로 접근 실패, `safe.directory` 거부, 일반 실패, 종료 신호, 세션 손실과 나눈다 |
 | 저장소는 있지만 작업 트리가 없다(bare 등) | 5.2 | 작업 트리 판정 `false`. 상태와 미커밋 변경 비교만 비활성으로 보이고, 기록과 커밋 사이 비교는 그대로 쓴다 |
+| 원격 Git이 worktree 목록을 읽지 못한다 | 5.2 | `worktree list` 실행 실패(판이 낮아 하위 명령이나 `--porcelain`을 모름). worktree 목록만 비활성으로 보이고 status·log·diff는 그대로 쓴다. `-z`만 모르면 위 대체 경로로 읽는다 |
+| diff가 너무 크다 | 5.2 | exec 출력 상한 도달(#3). 잘린 diff임을 보인다 |
 | SFTP 서브시스템이 꺼져 있거나 서버가 거절했다 | 5.3 | 꺼짐을 단정할 근거가 있는 경우와 subsystem 요청 거절(사유 모름)을 나눈다(#4) |
 | 권한이 없다 | 5.3 | SFTP 실패 사유 "권한 없음"(#4) |
 | 원격 Tasty가 없거나 실행 중이 아니다 | 5.4 | 포트 발견 실패(원격 인스턴스 없음·종료), 원격 리스너 없음 |
