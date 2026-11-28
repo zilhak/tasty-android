@@ -9,7 +9,7 @@
 [graph]
 # The two Android ABIs that the app ships. Dev dependencies are not linked into the app.
 # cargo-deny has no way to leave out build dependencies, so they are in the graph; that is why
-# Apache-2.0 WITH LLVM-exception is needed below. The notice file (N3b) uses normal dependencies only.
+# Apache-2.0 WITH LLVM-exception is needed below. The notice file (U10) uses normal dependencies only.
 targets = ["aarch64-linux-android", "x86_64-linux-android"]
 exclude-dev = true
 
@@ -24,7 +24,7 @@ allow = [
   "Apache-2.0 WITH LLVM-exception", # ar_archive_writer, build dependency of psm
   "BSD-3-Clause",                   # curve25519-dalek, ed25519-dalek, subtle
   "MPL-2.0",                        # UniFFI runtime and option-ext; file-level copyleft. The notice
-                                    # states how to get the source when the app ships (N3b)
+                                    # states how to get the source when the app ships (U10)
   "Unicode-3.0",                    # ICU4X crates, unicode-ident
   "Unicode-DFS-2016",               # finl_unicode, wezterm-bidi
   "WTFPL",                          # terminfo
