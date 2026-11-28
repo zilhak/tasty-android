@@ -46,11 +46,12 @@ jobs:
         working-directory: rust
         run: |
           want=4.1.2
-          have=$(cargo ndk --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
-          if [ "$have" = "$want" ]; then
-            echo "cargo-ndk $have restored from the Rust cache; not installing"
+          # Skip only when the command succeeds and prints exactly "cargo-ndk $want"; a failed
+          # command, another version or a pre-release counts as not installed.
+          if have=$(cargo ndk --version 2>/dev/null) && [ "$have" = "cargo-ndk $want" ]; then
+            echo "$have restored from the Rust cache; not installing"
           else
-            echo "cargo-ndk ${have:-missing}; installing $want"
+            echo "cargo-ndk $want not found (got: ${have:-nothing}); installing"
             cargo install cargo-ndk --version "$want" --locked
           fi
 
@@ -58,11 +59,12 @@ jobs:
         working-directory: rust
         run: |
           want=0.20.2
-          have=$(cargo deny --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
-          if [ "$have" = "$want" ]; then
-            echo "cargo-deny $have restored from the Rust cache; not installing"
+          # Skip only when the command succeeds and prints exactly "cargo-deny $want"; a failed
+          # command, another version or a pre-release counts as not installed.
+          if have=$(cargo deny --version 2>/dev/null) && [ "$have" = "cargo-deny $want" ]; then
+            echo "$have restored from the Rust cache; not installing"
           else
-            echo "cargo-deny ${have:-missing}; installing $want"
+            echo "cargo-deny $want not found (got: ${have:-nothing}); installing"
             cargo install cargo-deny --version "$want" --locked
           fi
 
