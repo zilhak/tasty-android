@@ -209,6 +209,19 @@ androidComponents {
     }
 }
 
+// NoticeTest reads these repo root files, so a change to either reruns the unit tests instead of
+// taking their result from the build cache.
+tasks.withType<Test>().configureEach {
+    inputs
+        .file(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.txt"))
+        .withPropertyName("noticeFile")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs
+        .file(rootProject.layout.projectDirectory.file("LICENSE"))
+        .withPropertyName("licenseFile")
+        .withPathSensitivity(PathSensitivity.NONE)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
