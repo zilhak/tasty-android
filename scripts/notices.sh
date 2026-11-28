@@ -130,12 +130,18 @@ rows() {
     printf '%s\n' "$out"
 }
 
+# A text file as lines: CRs removed and a newline at the end, also when the file has none. Every
+# text goes through here, so the output does not depend on how a tool treats a missing last newline.
+text_lines() {
+    tr -d '\r' < "$1" | awk '{ print }'
+}
+
 print_files() {
     local f
     for f in $1; do
         [ -f "$notices/$f" ] || die "notices/$f is missing"
         echo
-        tr -d '\r' < "$notices/$f"
+        text_lines "$notices/$f"
     done
     echo
 }
@@ -160,7 +166,7 @@ run_cargo_about() {
     # -o rather than a redirect: under PowerShell cargo-about refuses to write to a redirected stdout.
     (cd "$root/rust" && cargo about generate --locked --offline --fail \
         --manifest-path tasty-mobile-core/Cargo.toml -c about.toml -o "$tmp/about-raw" about.hbs)
-    tr -d '\r' < "$tmp/about-raw" > "$tmp/about"
+    text_lines "$tmp/about-raw" > "$tmp/about"
     # rust/about.hbs writes three parts, each after a line @@<part>.
     awk -v dir="$tmp" '/^@@/ { part = dir "/" substr($0, 3); printf "" > part; next } part { print > part }' \
         "$tmp/about"
@@ -236,10 +242,11 @@ rust_std() {
 mpl_source() {
     sort -u "$tmp/mpl" | awk '{ print "  " $0 }' > "$tmp/mpl-crates"
     [ -s "$tmp/mpl-crates" ] || die "cargo-about lists no MPL-2.0 crate"
+    text_lines "$notices/mpl-2.0-source.txt" > "$tmp/mpl-source"
     awk -v list="$tmp/mpl-crates" '
         $0 == "@@crates" { while ((getline line < list) > 0) print line; next }
         { print }
-    ' "$notices/mpl-2.0-source.txt" | tr -d '\r'
+    ' "$tmp/mpl-source"
 }
 
 # group:module:version of every external module in :app's releaseRuntimeClasspath. Constraints are
@@ -327,6 +334,12 @@ jna_libffi() {
     print_files jna/libffi-LICENSE
 }
 
+# Runs of empty lines become one, as cat -s does in GNU coreutils. Not cat -s itself: the uutils
+# coreutils of newer Ubuntu releases also drop a single empty line in some cases.
+squeeze_blank_lines() {
+    awk '$0 != "" || !blank { print } { blank = $0 == "" }'
+}
+
 build() {
     check_license_lists
     run_cargo_about
@@ -335,7 +348,7 @@ build() {
     map_coordinates
     {
         section "Tasty for Android"
-        tr -d '\r' < "$root/LICENSE"
+        text_lines "$root/LICENSE"
         section "Rust crates"
         echo "Crates linked into the app's native library, grouped by license text."
         echo
@@ -352,7 +365,7 @@ build() {
         section "Java Native Access (JNA)"
         gradle_groups 1
         jna_libffi
-    } | cat -s | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$1"
+    } | squeeze_blank_lines | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$1"
 }
 
 [ $# -eq 1 ] || usage
