@@ -4,6 +4,7 @@
 //! Kotlin needs no JSON library and never sees a tasty type. Fields the app does not know are
 //! ignored, so a newer remote that adds fields still parses.
 
+use serde_json::Value;
 use tasty_attach_protocol::{OverviewSurface, OverviewWorkspace, WorkspaceOverview};
 
 /// The workspaces and server capabilities of a remote Tasty, read in one state read.
@@ -65,14 +66,38 @@ impl std::error::Error for OverviewError {}
 /// Reads the `result` of a `workspace.overview` reply.
 #[uniffi::export]
 pub fn parse_workspace_overview(json: String) -> Result<RemoteWorkspaceOverview, OverviewError> {
+    let malformed = |reason: String| OverviewError::Malformed { reason };
+    let value: Value = serde_json::from_str(&json).map_err(|e| malformed(e.to_string()))?;
+    require_objects(&value).map_err(malformed)?;
     let overview: WorkspaceOverview =
-        serde_json::from_str(&json).map_err(|e| OverviewError::Malformed {
-            reason: e.to_string(),
-        })?;
+        serde_json::from_value(value).map_err(|e| malformed(e.to_string()))?;
     Ok(RemoteWorkspaceOverview {
         workspaces: overview.workspaces.into_iter().map(workspace).collect(),
         capabilities: overview.capabilities,
     })
+}
+
+/// Serde also reads a struct from a JSON array by field position. The reply is keyed
+/// objects, so an array where the overview, a workspace or a surface goes is refused.
+fn require_objects(value: &Value) -> Result<(), String> {
+    let Value::Object(overview) = value else {
+        return Err("the overview is not a JSON object".to_owned());
+    };
+    let Some(Value::Array(workspaces)) = overview.get("workspaces") else {
+        return Ok(()); // The typed read reports a missing or mistyped list.
+    };
+    for (i, ws) in workspaces.iter().enumerate() {
+        let Value::Object(ws) = ws else {
+            return Err(format!("workspace {i} is not a JSON object"));
+        };
+        let Some(Value::Array(surfaces)) = ws.get("surfaces") else {
+            continue;
+        };
+        if let Some(j) = surfaces.iter().position(|s| !s.is_object()) {
+            return Err(format!("surface {j} of workspace {i} is not a JSON object"));
+        }
+    }
+    Ok(())
 }
 
 fn workspace(ws: OverviewWorkspace) -> RemoteWorkspace {
@@ -202,6 +227,16 @@ mod tests {
         assert!(is_malformed(
             r#"{"workspaces": [{"id": 1, "name": "a", "subtitle": "", "busy_count": 0,
                 "mirror": false}], "capabilities": []}"#
+        ));
+        // Arrays where keyed objects go: serde would read them by field position.
+        assert!(is_malformed("[[], []]"));
+        assert!(is_malformed(
+            r#"{"workspaces": [[1, "a", "", 0, false, null, []]], "capabilities": []}"#
+        ));
+        assert!(is_malformed(
+            r#"{"workspaces": [{"id": 1, "name": "a", "subtitle": "", "busy_count": 0,
+                "mirror": false, "surfaces": [[2, "terminal", "t", false, null, null]]}],
+                "capabilities": []}"#
         ));
         // Wrong types.
         assert!(is_malformed(r#"{"workspaces": {}, "capabilities": []}"#));
