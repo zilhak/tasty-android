@@ -102,3 +102,49 @@ license = "WTFPL"
 [[terminfo.clarify.files]]
 path = "LICENSE"
 checksum = "cb48c148fb5c4903aac7905101492a3fb5acc252b98f0cceb8137dfcfa2f5956"
+
+# These crates give their MIT text without a copyright line; the copyright statement is in another
+# file of the package, so that file is added. A clarification applies to every version of a crate:
+# siphasher 0.3.11 has no LICENSE-MIT, so it fails this one (cargo-about logs a warning) and keeps
+# its text from notices/rust-crates.tsv.
+[siphasher.clarify]
+license = "MIT"
+
+[[siphasher.clarify.files]]
+path = "LICENSE-MIT"
+checksum = "f9c4c77baa3828004ee54b8a4f2db2e88ed44a6237a493965bf551fac0fcb62d"
+
+[[siphasher.clarify.files]]
+path = "COPYING"
+checksum = "c962ee4d1d05ddc138b202b2540219ebc57893fcf97b364852094a9a94ce1365"
+
+[linux-raw-sys.clarify]
+license = "MIT"
+
+[[linux-raw-sys.clarify.files]]
+path = "LICENSE-MIT"
+checksum = "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+
+[[linux-raw-sys.clarify.files]]
+path = "COPYRIGHT"
+checksum = "3290ae0fbc9ddb77d2239121d710f0bb9d31b3b4744e6d97fe01e652b4c1870b"
+
+[rustix.clarify]
+license = "MIT"
+
+[[rustix.clarify.files]]
+path = "LICENSE-MIT"
+checksum = "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+
+[[rustix.clarify.files]]
+path = "COPYRIGHT"
+checksum = "377c2e7c53250cc5905c0b0532d35973392af16ffb9596a41d99d202cf3617c9"
+
+# pest_stack_guard (MIT OR Apache-2.0) names its copyright holder only in its Apache-2.0 file, so
+# the crate is taken under Apache-2.0.
+[pest_stack_guard.clarify]
+license = "Apache-2.0"
+
+[[pest_stack_guard.clarify.files]]
+path = "LICENSE-APACHE"
+checksum = "9b40875025d726c3e2f46fdd88c062462dd0f86d4e6e1deb8da067e0ef337cd8"
