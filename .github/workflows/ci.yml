@@ -25,6 +25,7 @@ jobs:
     env:
       TOOL_CARGO_NDK_VERSION: 4.1.2
       TOOL_CARGO_DENY_VERSION: 0.20.2
+      TOOL_CARGO_ABOUT_VERSION: 0.9.3
     steps:
       - uses: actions/checkout@v7
 
@@ -51,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust
-          key: cargo-ndk-${{ env.TOOL_CARGO_NDK_VERSION }}-cargo-deny-${{ env.TOOL_CARGO_DENY_VERSION }}
+          key: cargo-ndk-${{ env.TOOL_CARGO_NDK_VERSION }}-cargo-deny-${{ env.TOOL_CARGO_DENY_VERSION }}-cargo-about-${{ env.TOOL_CARGO_ABOUT_VERSION }}
 
       - name: Install cargo-ndk ${{ env.TOOL_CARGO_NDK_VERSION }} unless the Rust cache restored it
         working-directory: rust
@@ -77,6 +78,21 @@ jobs:
           else
             echo "cargo-deny $want not found (got: ${have:-nothing}); installing"
             cargo install cargo-deny --version "$want" --locked
+          fi
+
+      # cargo-about builds the Rust part of THIRD_PARTY_NOTICES.txt (scripts/notices.sh). Its binary
+      # needs the cli feature.
+      - name: Install cargo-about ${{ env.TOOL_CARGO_ABOUT_VERSION }} unless the Rust cache restored it
+        working-directory: rust
+        run: |
+          want="$TOOL_CARGO_ABOUT_VERSION"
+          # Skip only when the command succeeds and prints exactly "cargo-about $want"; a failed
+          # command, another version or a pre-release counts as not installed.
+          if have=$(cargo about --version 2>/dev/null) && [ "$have" = "cargo-about $want" ]; then
+            echo "$have restored from the Rust cache; not installing"
+          else
+            echo "cargo-about $want not found (got: ${have:-nothing}); installing"
+            cargo install cargo-about --version "$want" --locked --features cli
           fi
 
       - name: Rust format, Clippy and tests
@@ -123,6 +139,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           validate-wrappers: true
+
+      # Builds the notice again from cargo-about, notices/ and the Gradle release runtime classpath,
+      # and fails when it differs from the committed file. After setup-gradle because it runs Gradle.
+      - name: License notice is up to date (THIRD_PARTY_NOTICES.txt)
+        run: scripts/notices.sh check
 
       - name: Check formatting
         run: ./gradlew spotlessCheck
