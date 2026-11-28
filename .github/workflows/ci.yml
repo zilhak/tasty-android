@@ -32,15 +32,27 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0" "ndk;30.0.16248370"
 
       # rust/rust-toolchain.toml pins the toolchain and Android targets; rustup installs them on first use.
-      - name: Install Rust toolchain and cargo-ndk
+      - name: Install Rust toolchain
         working-directory: rust
-        run: |
-          rustup show active-toolchain || rustup toolchain install
-          cargo install cargo-ndk --version 4.1.2 --locked
+        run: rustup show active-toolchain || rustup toolchain install
 
+      # Restored before the cargo installs below: the cache keeps the installed binaries, so a
+      # warm run does not compile cargo-ndk again.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust
+
+      - name: Install cargo-ndk 4.1.2 unless the Rust cache restored it
+        working-directory: rust
+        run: |
+          want=4.1.2
+          have=$(cargo ndk --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+          if [ "$have" = "$want" ]; then
+            echo "cargo-ndk $have restored from the Rust cache; not installing"
+          else
+            echo "cargo-ndk ${have:-missing}; installing $want"
+            cargo install cargo-ndk --version "$want" --locked
+          fi
 
       - name: Rust format, Clippy and tests
         working-directory: rust
