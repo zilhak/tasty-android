@@ -1,0 +1,104 @@
+# cargo-about policy for the Rust part of THIRD_PARTY_NOTICES.txt (U10). scripts/notices.sh runs
+# cargo-about 0.9.3 from rust/ with --locked --offline and --manifest-path tasty-mobile-core/Cargo.toml,
+# so the app cdylib is the only root.
+# The graph is the cargo deny graph in deny.toml without build dependencies: build dependencies are
+# not linked into the .so.
+
+# The same licenses in the same order as allow in deny.toml; scripts/notices.sh check fails when the
+# two lists differ. The order is a priority list: for "MIT OR Apache-2.0" the MIT text is used.
+accepted = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "WTFPL",
+]
+targets = ["aarch64-linux-android", "x86_64-linux-android"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# The crates below have no license file in their own folder; the license is the MIT file at the root
+# of their repository. For git and path crates cargo-about reads that file from the local checkout,
+# and the checksum pins its text.
+
+[tasty-ansi.clarify]
+license = "MIT"
+
+[[tasty-ansi.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-attach-protocol.clarify]
+license = "MIT"
+
+[[tasty-attach-protocol.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-net-identity.clarify]
+license = "MIT"
+
+[[tasty-net-identity.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-plugin-protocol.clarify]
+license = "MIT"
+
+[[tasty-plugin-protocol.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-reaper.clarify]
+license = "MIT"
+
+[[tasty-reaper.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-terminal.clarify]
+license = "MIT"
+
+[[tasty-terminal.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-type-appearance.clarify]
+license = "MIT"
+
+[[tasty-type-appearance.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-type-geometry.clarify]
+license = "MIT"
+
+[[tasty-type-geometry.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+[tasty-utils.clarify]
+license = "MIT"
+
+[[tasty-utils.clarify.git]]
+path = "LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+# The app itself: the path is relative to the rust/ workspace.
+[tasty-mobile-core.clarify]
+license = "MIT"
+
+[[tasty-mobile-core.clarify.git]]
+path = "../LICENSE"
+checksum = "7ae53ed65dbe27545b4f4996c41eb6af5db33696aeca3dc5ad58268d27992f4a"
+
+# Use the license file only; without this the license headers of three source files are added too.
+[terminfo.clarify]
+license = "WTFPL"
+
+[[terminfo.clarify.files]]
+path = "LICENSE"
+checksum = "cb48c148fb5c4903aac7905101492a3fb5acc252b98f0cceb8137dfcfa2f5956"

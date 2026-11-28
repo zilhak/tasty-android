@@ -1,0 +1,31 @@
+{{!-- Rendered by scripts/notices.sh, which splits the output at the @@ lines. --}}
+@@notice
+{{#each licenses}}
+{{#if source_path}}
+--------------------------------------------------------------------------------
+{{{name}}} ({{{id}}})
+Used by:
+{{#each used_by}}
+  {{{crate.name}}} {{{crate.version}}}
+{{/each}}
+
+{{{text}}}
+
+{{/if}}
+{{/each}}
+@@fallback
+{{#each licenses}}
+{{#unless source_path}}
+{{#each used_by}}
+{{{crate.name}}}	{{{crate.version}}}	{{{../name}}} ({{{../id}}})
+{{/each}}
+{{/unless}}
+{{/each}}
+@@mpl
+{{#each licenses}}
+{{#if (eq id "MPL-2.0")}}
+{{#each used_by}}
+{{{crate.name}}} {{{crate.version}}}
+{{/each}}
+{{/if}}
+{{/each}}
