@@ -15,7 +15,8 @@ pub enum RemoteErrorKind {
     /// The remote does not have the method.
     MethodNotFound,
     /// Any other remote error. `code` is the JSON text of the code as sent (a string code
-    /// keeps its quotes); both are None when the key is missing or null.
+    /// keeps its quotes, a null code is `null`) and None only when the key is missing.
+    /// `message` is None when the key is missing or null.
     Other {
         code: Option<String>,
         message: Option<String>,
@@ -32,10 +33,7 @@ pub fn classify_remote_error(error_json: String) -> RemoteErrorKind {
         return RemoteErrorKind::Malformed;
     };
     // The code decides first: a missing method stays a missing method whatever the message.
-    let code = fields
-        .remove("code")
-        .map(|raw| raw.get().to_owned())
-        .filter(|text| text != "null");
+    let code = fields.remove("code").map(|raw| raw.get().to_owned());
     let method_not_found = code.as_deref().is_some_and(|text| {
         matches!(
             serde_json::from_str::<serde_json::Value>(text),
@@ -110,9 +108,15 @@ mod tests {
             classify(r#"{"message": "no code"}"#),
             other(None, Some("no code"))
         );
+        // A null code is kept as sent; only a missing key gives None.
+        assert_eq!(
+            classify(r#"{"code": null, "message": "m"}"#),
+            other(Some("null"), Some("m"))
+        );
+        assert_eq!(classify(r#"{"message": "m"}"#), other(None, Some("m")));
         assert_eq!(
             classify(r#"{"code": null, "message": null}"#),
-            other(None, None)
+            other(Some("null"), None)
         );
         assert_eq!(classify("{}"), other(None, None));
     }
