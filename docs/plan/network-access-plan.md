@@ -460,7 +460,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 - `work/android-terminal`의 CI는 그 위에 다음을 더한다(U1로 develop `ccc0022`에 반영됨): SDK 설치에 `ndk;30.0.16248370`, `rust/`에서 `rustup show active-toolchain || rustup toolchain install`과 `cargo install cargo-ndk --version 4.1.2 --locked`, `Swatinem/rust-cache@v2`(`workspaces: rust`), `rust/`에서 `cargo fmt --all --check`·`cargo clippy --workspace --all-targets --locked -- -D warnings`·`cargo test --workspace --locked`, 그 뒤 기존 Gradle 4단계.
 - 생성된 UniFFI Kotlin은 커밋하지 않는다. `app/build/` 아래에 생기고 `.gitignore`의 `build/`에 들어간다. `spotlessCheck`도 `**/build/**`를 빼고 본다(루트 `build.gradle.kts`).
 - CI의 push 대상 브랜치를 git-flow에 맞추는 일은 U1 반영에서 했다(`ccc0022`: `develop`·`release`·`main`의 push와 그 브랜치로 가는 pull request에서 CI를 돈다).
-- 고지(U10): 앱 안에 한 장짜리 고지 화면을 두고, 같은 고지 파일을 릴리스에도 붙인다. 고지 파일은 `cargo deny`와 함께 CI가 생성·최신 여부를 확인한다(아래 제안).
+- 고지(U10): 앱 안에 한 장짜리 고지 화면을 두고, 같은 고지 파일을 릴리스에도 붙인다. 고지 파일은 `cargo deny`와 함께 CI가 생성·최신 여부를 확인한다(아래 제안). 고지 화면은 로고 메뉴 → About → Open source licenses로 열고, 고지 첫 항목은 앱 자신의 MIT(레포 루트 `LICENSE`)다.
 
 ### 제안
 
@@ -473,8 +473,8 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 - 시간: 두 ABI release 빌드(`lto = "thin"`, `codegen-units = 1`)에 tasty-network 의존(`ring`, russh 등)이 더해진다. 첫 CI 실행 시간을 재고 `timeout-minutes: 30`을 그 값으로 다시 정한다.
 - 라이선스: 앱 `.so`에 UniFFI 런타임(MPL-2.0)이 링크되고 JNA를 싣는다. `rust/`에 `cargo deny`를 둔다. 허용 목록은 tasty-network `deny.toml`@b103e90에서 시작하되 그대로 쓰지 않는다. (1) tasty-network의 OpenSSH 이식 후속 결정은 이식 크레이트에 `BSD-2-Clause AND ISC AND SSH-short`를 요구하는데 b103e90 허용 목록에는 `SSH-short`가 없다. 앱이 실제로 링크하는 판의 라이선스로 목록을 정한다. (2) 그 정책 파일은 crates.io 밖 git 출처를 거절한다(`unknown-git = "deny"`). 앱은 tasty와 tasty-network를 git으로 받으므로 두 출처를 `allow-git`에 적는다.
 - 고지 파일(U10): 고지 파일 하나를 빌드가 만들고, 앱 안 고지 화면과 릴리스 첨부가 그 같은 파일을 쓴다. 배포 경로(기획 4.9)와 상관없이 같다.
-  - 내용: 앱 cdylib이 실제로 링크하는 Rust 의존(배포 빌드 feature, 두 ABI target의 일반 의존 그래프)의 이름·판·라이선스·저작권 표시, UniFFI 런타임(MPL-2.0), JNA, tasty-network의 OpenSSH 이식 코드 저작권 표시(이식 크레이트의 `BSD-2-Clause AND ISC AND SSH-short`, 위 라이선스 항목), 앱이 싣는 Android 쪽 Gradle 의존. 5.3의 Markdown 스크립트를 (a)로 정하면 번들한 highlight.js·KaTeX·mermaid도 들어간다(공식 플러그인도 같은 셋을 `THIRD_PARTY_LICENSES.md`와 `LICENSES/`에 적는다, tasty-official-plugins develop `4c80e96`).
-  - 만드는 방법: Rust 부분은 `cargo deny`의 라이선스 검사와 같은 그래프·같은 허용 목록에서 생성기로 만든다. 두 검사가 다른 그래프를 보면 고지에서 빠지는 의존이 생기기 때문이다. Gradle 의존은 Gradle 쪽 라이선스 보고에서, 생성기가 모르는 항목(OpenSSH 이식 고지, 번들 스크립트)은 레포에 둔 원문 파일에서 합친다. 생성 도구는 7절 작업 때 고른다.
+  - 내용: 앱 cdylib이 실제로 링크하는 Rust 의존(배포 빌드 feature, 두 ABI target의 일반 의존 그래프)의 이름·판·라이선스·저작권 표시, Rust 표준 라이브러리(std·core·alloc과 그 의존, `.so`에 정적으로 들어감), UniFFI 런타임(MPL-2.0), JNA, tasty-network의 OpenSSH 이식 코드 저작권 표시(이식 크레이트의 `BSD-2-Clause AND ISC AND SSH-short`, 위 라이선스 항목), 앱이 싣는 Android 쪽 Gradle 의존. 5.3의 Markdown 스크립트를 (a)로 정하면 번들한 highlight.js·KaTeX·mermaid도 들어간다(공식 플러그인도 같은 셋을 `THIRD_PARTY_LICENSES.md`와 `LICENSES/`에 적는다, tasty-official-plugins develop `4c80e96`).
+  - 만드는 방법: Rust 부분은 `cargo deny`의 라이선스 검사와 같은 뿌리·target·feature·dev 제외에서 빌드 의존만 뺀 그래프, 같은 허용 목록에서 생성기로 만든다. 두 검사가 다른 그래프를 보면 고지에서 빠지는 의존이 생기기 때문이다. Gradle 의존은 Gradle 쪽 라이선스 보고에서, 생성기가 모르는 항목(OpenSSH 이식 고지, 번들 스크립트)은 레포에 둔 원문 파일에서 합친다. Rust 부분은 cargo-about 0.9.3(`--locked --offline`), Gradle 부분은 `releaseRuntimeClasspath` 좌표와 레포 대응표로 만든다.
   - 확인: 생성한 고지 파일은 레포에 커밋해 의존이 바뀔 때 diff로 보이게 한다. CI는 `cargo deny check` 뒤 고지 파일을 다시 만들어 커밋된 파일과 비교하고, 다르면 실패한다(생성·최신 여부 확인). 빌드는 그 파일을 APK assets에 넣고, 고지 화면은 그 asset을 그대로 보인다. 릴리스 작업은 같은 커밋의 같은 파일을 첨부한다.
 - 증거 요구: CI 기록에서 (1) `lint` 단계가 `cargoNdkBuild`·`uniffiBindgen`을 실행하고 `test`·`assembleDebug` 단계는 최신으로 건너뛴다, (2) 두 번째 실행에서 cargo-ndk를 다시 컴파일하지 않는다, (3) Android target `clippy`와 `system-ssh` 확인 단계가 돈다, (4) 전체 시간이 새 상한 안이다, (5) `cargo deny check`가 돌고, 의존을 바꾸고 고지 파일을 갱신하지 않은 커밋에서 고지 확인 단계가 실패한다, (6) APK 안의 고지 파일과 릴리스 첨부 파일이 커밋된 고지 파일과 같은 내용이다.
 
