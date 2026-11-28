@@ -191,7 +191,33 @@
 - 경로 문법: Explorer의 경로 잇기와 부모 구하기는 원격 Tasty가 descriptor에 알리는 `path_syntax`(`Posix`·`Windows`, 5.4)를 따른다. 경로 모양(드라이브 문자, 구분자)으로 원격 OS를 추정하지 않는다.
 - 원격 Tasty가 없는 Host(SFTP만 쓰고 descriptor가 없음): Explorer는 SFTP 경로 문법을 쓴다. SFTP 프로토콜의 파일 이름은 `/`를 디렉터리 구분자로 쓰고, `/`로 시작하면 절대 경로, 그 밖은 사용자 기본 폴더 기준이며, `..`은 부모 폴더다([draft-ietf-secsh-filexfer-02](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) 6.2 "File Names"). Windows OpenSSH의 SFTP 서버도 Windows 경로를 `/`로 시작하는 `/C:/...` 꼴로 준다(PowerShell/openssh-portable `latestw_all` 브랜치 `contrib/win32/win32compat/misc.c`의 `realpath`: 앞에 `/`를 붙이고 구분자를 `/`로 바꾼다, 주석 "/x:/users/test1 format"). 그래서 경로 잇기와 부모 구하기는 SFTP 경로 규칙으로 하고, 이때도 OS를 추정하지 않는다.
 
+- 뷰어 형식(U7)과 기준 목록: 공식 플러그인 레포(tasty-official-plugins develop `4c80e96`)에서 파일을 여는 핸들러(`[[contributes.handler]]`, `action.kind = "open_surface"`)는 네 개이고, 판별은 모두 확장자 규칙(`kind = "extension"`)이다. MIME 규칙은 없다.
+
+  | 공식 플러그인 | 핸들러의 감지기 | 확장자 | 감지기 정의 |
+  |---|---|---|---|
+  | Markdown Viewer(`com.tasty.markdown`) | `markdown` | `md`, `markdown` | `tasty-official-plugins:crates/tasty-plugin-markdown/tasty-plugin.toml@4c80e96` |
+  | Image(`com.tasty.image`) | `image` | `png`, `jpg`, `jpeg`, `gif`, `webp`, `bmp`, `ico`, `tiff`, `tif` | `tasty-official-plugins:crates/tasty-plugin-image/tasty-plugin.toml@4c80e96` |
+  | HTML Viewer(`com.tasty.html`) | `html`(본체 감지기) | `html`, `htm` | `tasty:crates/tasty-file-format/src/defaults/default-file-format.toml@72c036b` |
+  | HTML Viewer(`com.tasty.html`)의 `svg-viewer` | `svg`(본체 감지기) | `svg` | 같은 본체 파일. 이미지 플러그인이 SVG를 디코드하지 못해 WebView로 그린다고 매니페스트가 적는다(`tasty-official-plugins:crates/tasty-plugin-html/tasty-plugin.toml@4c80e96`) |
+
+  - 목록을 맞추는 방법: 앱의 형식 표는 위 표 하나로 두고 기준 sha 두 개(공식 플러그인 레포, 본체)를 함께 적는다. 갱신할 때는 공식 플러그인 레포 `crates/*/tasty-plugin.toml`의 `open_surface` 핸들러를 다시 모으고, 핸들러가 가리키는 감지기의 확장자를 그 플러그인의 `[[contributes.detector]]`에서, 플러그인에 없으면 본체 `default-file-format.toml`에서 읽는다. 새 핸들러가 생기면 앱 뷰어를 더한 뒤에 표에 넣는다(표에 있지만 앱이 열지 못하는 형식을 만들지 않는다). 파일 이름 대소문자는 본체 판별과 같은 규칙을 따른다(④에서 `tasty-file-format`의 규칙으로 확인한다).
+  - 공식 플러그인의 다른 기능(Image의 그리기 캔버스, HTML Viewer의 URL 열기·원격 HTTP 제공 등)은 U7의 범위가 아니다. Explorer에서 고른 원격 파일을 보는 것만 한다.
+- 이미지: 보기만 한다. SFTP 범위 읽기(#4)로 받되 상한을 둔다. 상한을 넘는 파일은 바로 받지 않고 크기를 보이며 확인을 받는다(데스크톱 Markdown Viewer도 큰 파일 확인 팝업 `large-file-confirm`을 둔다, 같은 매니페스트). 상한 값은 ④에서 정한다. 디코드는 Android 플랫폼 디코더로 한다. 표의 형식 가운데 플랫폼 디코더가 열지 못하는 것(TIFF 등. 지원 목록은 작업 시점 Android 문서 "Supported media formats"로 확인한다)은 아래 판단 필요 항목이다.
+- Markdown·HTML·SVG는 WebView로 그리고, 원격 파일 내용은 믿지 않는 입력으로 다룬다.
+  - 원격 리소스 차단: 문서는 앱이 정한 가상 출처(base URL)로 싣고, WebView의 모든 요청을 가로챈다(`WebViewClient.shouldInterceptRequest`). 가상 출처 밖의 요청(http·https 원격 주소, 다른 scheme)은 네트워크로 내보내지 않고 막는다. 데스크톱 두 WebView 플러그인도 원격 콘텐츠 기본값이 꺼짐이다(`allow_remote_content = false`, 같은 두 매니페스트).
+  - 상대 경로 리소스: 가상 출처 아래 요청은 문서의 원격 경로를 기준으로 풀어, 문서를 연 같은 SFTP 세션의 범위 읽기로만 읽어 넘긴다. 이미지와 같은 상한을 두고, 읽기 실패는 그 리소스만 비운다.
+  - 파일·content 접근 끔: `setAllowFileAccess(false)`, `setAllowContentAccess(false)`. 앱 로컬 파일과 다른 앱의 content provider를 읽지 못하게 한다.
+  - 다운로드·팝업·이동 끔: 다운로드를 받지 않고, 새 창(`setSupportMultipleWindows(false)`, 스크립트의 창 열기 금지)을 열지 않으며, 링크를 눌러도 WebView 안에서 다른 문서로 이동하지 않는다(`shouldOverrideUrlLoading`이 모두 가로챈다). 링크를 밖에서 여는 방법은 ④에서 정한다.
+  - 자바스크립트: HTML·SVG 문서는 끈다(`setJavaScriptEnabled(false)`). 데스크톱 HTML Viewer도 스크립트 격리 기본값이 켜짐이고(`sandbox_scripts = true`), 문서마다 스크립트와 원격 콘텐츠를 판정해 차단 안내와 허용 버튼을 보이는 게이트(`script_gate = true`)를 둔다(같은 매니페스트, tasty `docs/dev-guide/plugin-development.md`@72c036b의 `script_gate` 항목). 앱이 그 허용 버튼을 둘지는 아래 판단 필요 항목이다.
+  - Markdown의 스크립트: 데스크톱 Markdown Viewer는 원문을 ammonia로 정화한 HTML에 플러그인이 번들한 스크립트(highlight.js, KaTeX, mermaid, 주소창·찾기 스크립트)를 넣어 그리므로, 그 kind의 기본값은 스크립트 켜짐이다(`[surface_kinds.webview_defaults] sandbox_scripts = false`, `tasty-official-plugins:crates/tasty-plugin-markdown/tasty-plugin.toml`·`src/render.rs`@4c80e96). 그래서 "자바스크립트 끔"을 Markdown에 그대로 적용하면 코드 강조·수식·다이어그램을 데스크톱과 같게 그릴 수 없다. 아래 판단 필요 항목이다.
+
 결정 대기: 없음. 편집 범위(기획 초안 4.4)는 U8로, 열 수 있는 형식(기획 초안 3.3)은 U7로 정해졌다.
+
+판단 필요(제품 동작이 아닌 구현 판단. ④ 전에 정한다):
+
+- Markdown 렌더링의 스크립트: (a) 앱이 원문을 정화한 HTML로 만들고 앱이 번들한 스크립트만 실행한다(원문 안의 스크립트는 정화에서 지운다. 자바스크립트는 켜지만 원격 문서의 코드는 돌지 않는다), (b) 자바스크립트를 끄고 코드 강조·수식·다이어그램 없이 그린다, (c) WebView 없이 앱이 직접 그린다. 추천은 (a)다. 데스크톱과 같은 결과를 얻으면서 원격 문서의 스크립트는 돌지 않는다. (a)를 고르면 번들한 스크립트의 고지가 7절 고지 파일에 들어간다.
+- HTML 문서의 스크립트 허용: 데스크톱처럼 문서마다 허용 버튼을 둘지, 첫 판은 늘 끈 채로 둘지. 추천은 첫 판은 늘 끔이다. 원격 파일을 보는 앱에서 스크립트를 켜면 가상 출처 안의 요청(같은 SFTP 세션의 다른 파일 읽기)을 스크립트가 고를 수 있게 된다.
+- 플랫폼 디코더가 열지 못하는 이미지 형식(TIFF 등): 디코더를 앱에 더할지, 그 형식은 "이 기기에서 볼 수 없음"으로 보일지(5.8). U7은 공식 플러그인 목록 전체를 지원한다고 정했으므로, 디코더를 더하지 않으면 사용자 확인이 필요하다.
 
 ### 5.4 원격 Tasty attach
 
@@ -288,6 +314,9 @@
 | diff가 너무 크다 | 5.2 | exec 출력 상한 도달(#3). 잘린 diff임을 보인다 |
 | SFTP 서브시스템이 꺼져 있거나 서버가 거절했다 | 5.3 | 꺼짐을 단정할 근거가 있는 경우와 subsystem 요청 거절(사유 모름)을 나눈다(#4) |
 | 권한이 없다 | 5.3 | SFTP 실패 사유 "권한 없음"(#4) |
+| 뷰어가 없는 형식이다 | 5.3 | 확장자가 5.3 형식 표에 없음. 내용을 열지 않고 형식 미지원으로 보인다 |
+| 파일이 뷰어 상한보다 크다 | 5.3 | 받기 전 `stat` 크기. 크기를 보이고 확인을 받는다 |
+| 문서가 막힌 리소스를 쓴다 | 5.3 | WebView 요청 가로채기에서 막은 원격 주소·다른 scheme, 또는 읽지 못한 상대 경로 리소스. 문서는 그대로 보이고 막힌 사실을 알린다 |
 | 원격 Tasty가 없거나 실행 중이 아니다 | 5.4 | 포트 발견 실패(원격 인스턴스 없음·종료), 원격 리스너 없음 |
 | 원격 Tasty가 전환 전 판이다 | 5.4 | `PeerTooOld { evidence: PortOnlyDiscovery }` 또는 v1 거절 ACK(`evidence: V1Ack`) |
 | 원격 Tasty가 요청 채널을 광고하지 않는다 | 5.4 | handshake `caps`에 `net.request` 없음(구버전 판정과 별개) |
