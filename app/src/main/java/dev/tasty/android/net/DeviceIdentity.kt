@@ -24,10 +24,13 @@ class DeviceIdentity(
     fun deviceId(): String = loadOrCreateDeviceKey(keyDir.absolutePath).deviceId
 
     companion object {
-        /** The folder under [Context.getFilesDir] that holds the app's key. */
-        const val KEY_DIR_NAME = "tasty-net"
+        /** The folder under [Context.getNoBackupFilesDir] that holds the app's key. */
+        const val KEY_DIR_NAME = "net"
 
-        /** The identity of this app install, kept in its private files folder. */
-        fun forApp(context: Context): DeviceIdentity = DeviceIdentity(File(context.filesDir, KEY_DIR_NAME))
+        /**
+         * The identity of this app install. The key is kept under the no-backup files folder, so it is
+         * never part of a cloud backup or a device transfer, and a new device gets a new device ID.
+         */
+        fun forApp(context: Context): DeviceIdentity = DeviceIdentity(File(context.noBackupFilesDir, KEY_DIR_NAME))
     }
 }
