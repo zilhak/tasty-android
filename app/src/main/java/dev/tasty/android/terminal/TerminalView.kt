@@ -53,10 +53,10 @@ class TerminalView(
         set(value) {
             if (field == value) return
             field = value
+            composing = ""
             if (value) {
                 val keyboard = context.getSystemService(InputMethodManager::class.java)
                 windowToken?.let { keyboard?.hideSoftInputFromWindow(it, 0) }
-                composing = ""
             }
             isFocusable = !value
             isFocusableInTouchMode = !value
@@ -363,7 +363,7 @@ class TerminalView(
             text: CharSequence,
             newCursorPosition: Int,
         ): Boolean {
-            composing = text.toString()
+            if (!covered) composing = text.toString()
             invalidate()
             return true
         }
