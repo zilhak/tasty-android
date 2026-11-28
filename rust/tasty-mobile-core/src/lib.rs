@@ -8,6 +8,7 @@
 mod device;
 mod overview;
 mod peer_store;
+mod remote_error;
 mod snapshot;
 mod tree;
 mod workspace;
@@ -25,6 +26,7 @@ pub use overview::{
 pub use peer_store::{
     PeerKeyError, PeerPin, peer_key_get, peer_key_pin_if_absent, peer_key_reregister,
 };
+pub use remote_error::{RemoteErrorKind, classify_remote_error};
 pub use snapshot::{CellColor, ScreenSnapshot, TextSpan};
 pub use tree::SplitOrientation;
 pub use workspace::{
