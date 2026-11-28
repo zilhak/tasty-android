@@ -97,6 +97,8 @@ class DeviceIdentityTest {
             assertTrue(File(appKeyDir, "device_key").isFile)
             assertTrue(first, DEVICE_ID.matches(first))
             assertEquals(first, second)
+            // A key already in the expected folder must not hide forApp using another folder.
+            assertEquals(DeviceIdentity(appKeyDir).deviceId(), first)
         } finally {
             if (!existed) appKeyDir.deleteRecursively()
         }
