@@ -1,5 +1,6 @@
 package dev.tasty.android.net
 
+import android.system.Os
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -132,6 +133,47 @@ class PeerKeysTest {
         assertThrows(PeerKeyException.InvalidDeviceId::class.java) { keys.pinIfAbsent(PEER, id.uppercase()) }
         assertThrows(PeerKeyException.InvalidDeviceId::class.java) { keys.reregister(PEER, "zz") }
         assertFalse(peersDir.exists())
+    }
+
+    @Test
+    fun theFirstPinCreatesTwoMissingFolders() {
+        val (id) = deviceIds(1)
+        val netDir = File(parent, "net")
+        val nestedDir = File(netDir, "peers")
+        val pin = PeerKeys(nestedDir).pinIfAbsent(PEER, id)
+        Log.i(TAG, "folders: net=${netDir.isDirectory} peers=${nestedDir.isDirectory} pin=$pin")
+        assertEquals(PeerPin(inserted = true, deviceId = id), pin)
+        assertTrue(netDir.isDirectory)
+        assertEquals(id, PeerKeys(nestedDir).get(PEER))
+        assertEquals(listOf("$PEER.id"), nestedDir.list()?.sorted())
+    }
+
+    @Test
+    fun aLeftTemporaryFileIsIgnored() {
+        val (left, id) = deviceIds(2)
+        check(peersDir.mkdirs()) { "cannot create $peersDir" }
+        // What a process that died before its rename leaves behind.
+        val temp = File(peersDir, ".$PEER.1.2.3.tmp")
+        temp.writeText("$left\n")
+        val keys = PeerKeys(peersDir)
+        assertNull(keys.get(PEER))
+        val pin = keys.pinIfAbsent(PEER, id)
+        Log.i(TAG, "leftover: left=$left id=$id pin=$pin")
+        assertEquals(PeerPin(inserted = true, deviceId = id), pin)
+        assertEquals(id, keys.get(PEER))
+        assertEquals("$left\n", temp.readText())
+        assertEquals(listOf(".$PEER.1.2.3.tmp", "$PEER.id"), peersDir.list()?.sorted())
+    }
+
+    @Test
+    fun theFolderAndTheRecordArePrivate() {
+        val (id) = deviceIds(1)
+        PeerKeys(peersDir).pinIfAbsent(PEER, id)
+        val folderMode = Os.stat(peersDir.path).st_mode and 0b111_111_111
+        val recordMode = Os.stat(File(peersDir, "$PEER.id").path).st_mode and 0b111_111_111
+        Log.i(TAG, "modes: folder=${folderMode.toString(8)} record=${recordMode.toString(8)}")
+        assertEquals("700", folderMode.toString(8))
+        assertEquals("600", recordMode.toString(8))
     }
 
     @Test
