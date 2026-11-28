@@ -187,6 +187,20 @@ name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
 
 [[package]]
 name = "bytes"
@@ -1625,6 +1639,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tasty-attach-protocol"
+version = "0.1.0"
+source = "git+https://github.com/zilhak/tasty?rev=6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b#6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tasty-plugin-protocol",
+]
+
+[[package]]
 name = "tasty-i18n"
 version = "0.1.0"
 source = "git+https://github.com/zilhak/tasty?rev=e1e705bc49486612b39b38c7b3f91c4eba6ca9e9#e1e705bc49486612b39b38c7b3f91c4eba6ca9e9"
@@ -1641,6 +1665,8 @@ name = "tasty-mobile-core"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "serde_json",
+ "tasty-attach-protocol",
  "tasty-net-identity",
  "tasty-terminal",
  "termwiz",
@@ -1659,6 +1685,17 @@ dependencies = [
  "subtle",
  "tracing",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tasty-plugin-protocol"
+version = "0.2.16"
+source = "git+https://github.com/zilhak/tasty?rev=6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b#6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tasty-type-appearance",
+ "tasty-type-geometry",
 ]
 
 [[package]]
@@ -1689,6 +1726,24 @@ dependencies = [
  "tracing",
  "unicode-width",
  "windows",
+]
+
+[[package]]
+name = "tasty-type-appearance"
+version = "0.1.0"
+source = "git+https://github.com/zilhak/tasty?rev=6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b#6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b"
+dependencies = [
+ "bytemuck",
+ "serde",
+ "tasty-type-geometry",
+]
+
+[[package]]
+name = "tasty-type-geometry"
+version = "0.1.0"
+source = "git+https://github.com/zilhak/tasty?rev=6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b#6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

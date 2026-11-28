@@ -13,10 +13,15 @@ uniffi = "0.32"
 # bump the rev on purpose and keep Cargo.lock in step.
 tasty-terminal = { git = "https://github.com/zilhak/tasty", rev = "e1e705bc49486612b39b38c7b3f91c4eba6ca9e9" }
 termwiz = "0.22"
+serde_json = "1"
 # Device key and device ID of the Tasty network. Pinned to a pushed develop commit of
 # github.com/zilhak/tasty-network until it tags an Android release; bump the rev on purpose
 # and keep Cargo.lock in step.
 tasty-net-identity = { git = "https://github.com/zilhak/tasty-network", rev = "36cd2a29adeb33e0b8383767db74ec233c07535c" }
+# Wire types of the attach protocol (workspace.overview and error codes). Pinned to a pushed
+# develop commit of github.com/zilhak/tasty, separate from the tasty-terminal rev above; bump
+# the rev on purpose and keep Cargo.lock in step.
+tasty-attach-protocol = { git = "https://github.com/zilhak/tasty", rev = "6e99e0d0206ad045b4351f7a0e6b3b9b0a4f218b" }
 
 [profile.release]
 lto = "thin"

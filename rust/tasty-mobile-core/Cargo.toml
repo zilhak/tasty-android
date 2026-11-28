@@ -16,3 +16,5 @@ termwiz.workspace = true
 tasty-net-identity.workspace = true
 # renameat2 with RENAME_NOREPLACE for the peer key store (called as a raw syscall).
 libc = "0.2.191"
+tasty-attach-protocol.workspace = true
+serde_json.workspace = true
