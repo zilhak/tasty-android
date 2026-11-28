@@ -46,6 +46,7 @@ import dev.tasty.android.terminal.TerminalStatus
 import dev.tasty.android.terminal.TerminalView
 import dev.tasty.android.ui.AboutScreen
 import dev.tasty.android.ui.InputPopup
+import dev.tasty.android.ui.LicensesScreen
 import dev.tasty.android.ui.ListPopup
 import dev.tasty.android.ui.PopupItem
 import dev.tasty.android.ui.TastyTokens
@@ -112,7 +113,11 @@ fun WorkspaceScreen(
             }
             when (page) {
                 Page.About -> {
-                    AboutScreen(onOpenLicenses = {}, onClose = { page = null })
+                    AboutScreen(onOpenLicenses = { page = Page.Licenses }, onClose = { page = null })
+                }
+
+                Page.Licenses -> {
+                    LicensesScreen(onClose = { page = Page.About })
                 }
 
                 null -> {
@@ -126,6 +131,9 @@ fun WorkspaceScreen(
 /** A page that covers the workspace, opened from the logo menu. */
 internal enum class Page {
     About,
+
+    /** Opened from About; going back returns to About. */
+    Licenses,
 }
 
 /** A popup over the screen: a menu ([ListPopup]) or a short text entry ([InputPopup]). */
