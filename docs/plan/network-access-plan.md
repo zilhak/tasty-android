@@ -24,6 +24,11 @@
 | U3 | 앱에서 Ed25519 키를 만들어 Android Keystore의 AES 키로 감싸 저장한다. 기존 개인 키 가져오기와 공개키 복사 화면을 둔다. 비밀번호는 저장하지 않고 매번 묻는다(B) | 같은 답 |
 | U4 | 접속 프로필은 앱의 `ssh/config`(OpenSSH 형식, UI 편집과 붙여넣기 가져오기)이고, Tasty 전용 값은 앱 고유 파일에 둔다(A) | 같은 답 |
 | U5 | 연결은 앱이 앞에 있을 때만 유지한다(A)로 시작한다. 백그라운드 지속 연결을 실제로 제공하는 단계에서 다시 묻는다 | 같은 답 |
+| U6 | Git 정보는 읽기만 한다. status·log·diff에 worktree 정보(worktree가 몇 개이고 어디에 있는지)를 더한다. 브랜치 목록 화면과 쓰기는 없다(5.2) | 사용자 결정 2026-11-28. 요지: "읽기만 지원하는데, worktree 정보까지는 보여줘야" 하고 "worktree가 몇개있고 어디어디에 있다" 정도 |
+| U7 | 뷰어는 공식 플러그인이 지원하는 형식만 연다. 지금은 Markdown·이미지·HTML이고, 공식 플러그인이 지원하는 형식이 늘면 따라 늘린다. 이미지는 보기만 한다(5.3) | 사용자 결정 2026-11-28. 요지: "공식 플러그인에서 지원하는 목록만", "추후 … 늘어나면 다른 포맷도 지원" |
+| U8 | 편집은 텍스트 편집과 파일 관리(만들기·이름 바꾸기·지우기·옮기기)다. 시점은 ④(읽기) 뒤다. 지우기에는 확인 단계를 둔다(5.3) | 사용자 결정 2026-11-28 |
+| U9 | 대화형 원격 SSH 터미널을 넣는다. 순서는 ⑤-2 화면 attach 뒤다. 첫 판은 앱이 뒤로 가면 셸이 끊긴다(U5 그대로, 5.9) | 사용자 결정 2026-11-28 |
+| U10 | 라이선스 고지는 앱 안의 한 장짜리 고지 화면으로 보인다. 같은 고지 파일을 릴리스에도 붙인다. `cargo deny`와 CI의 고지 파일 생성 확인과 묶는다(7절) | 사용자 결정 2026-11-28 |
 | R1 | 바인딩 크레이트 `tasty-net-ffi`는 tasty-network에 두고, 앱 cdylib에 rlib으로 링크해 ABI별 `.so` 하나로 싣는다. Kotlin 생성은 앱 Gradle 작업이 라이브러리 모드로 한다. UniFFI 판은 tasty-network가 고정하는 최신 안정판을 두 레포가 함께 쓴다(판 규칙은 뒤에 바뀌었다. 3절) | 같은 답 |
 | R2 | 6절 요구 표 #1~#11(6b·7b 포함)을 tasty-network에 전달했다. 6절 #2(메모리 바이트 키)는 U3 때문에 조건부가 아니라 요구다. 6절 #12~#15와 #7+ 행(#7에 이 문서가 더한 확인 항목)은 이 문서가 더한 것이고 2026-11-27에 전달됐다. tasty-network 쪽 위치는 6절에 적는다 | 같은 답 |
 | R3 | tasty에 두 작업을 만든다. (B) attach 도메인 메시지·descriptor의 serde 타입만 담은 작은 크레이트(Android에서 빌드 가능), (A) 읽기 전용 원자 메서드 `workspace.overview`. 크레이트 이름과 sha는 tasty에 반영된 뒤 받는다 | tasty 쪽 의견(tasty develop `a8c4d26f4d` 기준), 2026-11-27 |
@@ -157,6 +162,7 @@
 
 - Git 정보(전제 4)는 원격에서 `git` 명령을 exec 채널로 실행해 읽는다.
 - 원격 Tasty 포트 발견도 exec 채널로 같은 원격 명령을 돌린다(진행 중 초안 `bcbcfba` `mobile.md` "내장 백엔드의 경계"). 포트 발견은 transport 안에서 일어나고 앱은 설정값만 준다.
+- Git 범위(U6): 읽기만 한다. status·log·diff와 worktree 목록(개수, 경로, 알 수 있으면 브랜치)을 보인다. 브랜치 목록 화면과 쓰기 명령은 없다.
 
 제안:
 
@@ -165,11 +171,15 @@
 - 성공 출력은 Git의 기계 판독 형식(`status --porcelain=v2 -z`, `log`의 지정 형식 등)으로 받아 로캘과 특수문자 경로에 덜 기대게 한다. 읽기 전용 조회가 원격 인덱스를 고쳐 쓰지 않게 `git --no-optional-locks`를 붙인다(`status`는 기본으로 인덱스의 상태 캐시를 갱신해 쓸 수 있다).
 - 실패 분류: exec 결과는 종료 코드 말고도 종료 신호, 세션 손실, 종료 상태 미수신이 있다(develop `558d4c7` `ssh-backends.md` "터널·exec·SFTP"). 그래서 "`git` 없음"은 종료 코드 하나로 정하지 않는다. 지원하는 원격 셸(POSIX sh, Windows PowerShell·cmd)마다 명령과 경로를 넘기는 방식과 `git` 설치 여부를 확인하는 명령을 따로 정한다. 포트 발견의 `detect_port_mode`는 원격에 도달한 발견 방식(성공한 방식, 그리고 원격 인스턴스 종료 확정 `RemoteInstanceExited`를 보고한 방식도 포함. `detect_first_success`와 시험 `detect_port_mode_returns_the_mode_that_reported_an_exited_instance`)만 돌려주고 셸 자체는 판별하지 않으므로(`crates/tasty-net-ssh/src/discovery.rs`@b103e90), Git용 원격 셸 판정은 따로 둔다(프로필 값 또는 앱의 판정 명령). 저장소 판정은 한 번의 실패로 정하지 않고 셋을 따로 본다: (1) 저장소 발견 여부(대상 경로 접근 실패와 "저장소를 찾지 못함"을 나눈다), (2) 작업 트리가 필요한 기능(상태, 작업 트리·인덱스와의 미커밋 변경 비교)의 사용 가능 여부(bare 저장소나 `.git` 폴더 안에서는 `--is-inside-work-tree`가 `false`라 저장소는 있어도 그 기능만 비활성. 커밋 사이 비교와 기록은 bare에서도 된다), (3) Git 실행 거부(`safe.directory` 등)와 일반 실행 실패. 판정 결과는 5.8의 시각적 피드백으로 보인다.
 
-결정 대기: Git 정보로 보여 줄 범위(기획 초안 3.2, 사용자 몫).
+결정 대기: 없음. Git 정보로 보여 줄 범위(기획 초안 3.2)는 U6으로 정해졌다.
 
 ### 5.3 내장 SSH SFTP
 
-정해진 것: Explorer(전제 3)는 SFTP로 읽는다.
+정해진 것:
+
+- Explorer(전제 3)는 SFTP로 읽는다.
+- 뷰어(U7): 공식 플러그인이 지원하는 형식만 연다. 지금은 Markdown·이미지·HTML이다. 이미지는 보기만 한다.
+- 쓰기(U8): 텍스트 편집과 파일 관리(만들기·이름 바꾸기·지우기·옮기기). ④의 읽기 뒤에 만든다. 지우기에는 확인 단계를 둔다.
 
 제안:
 
@@ -179,7 +189,7 @@
 - 경로 문법: Explorer의 경로 잇기와 부모 구하기는 원격 Tasty가 descriptor에 알리는 `path_syntax`(`Posix`·`Windows`, 5.4)를 따른다. 경로 모양(드라이브 문자, 구분자)으로 원격 OS를 추정하지 않는다.
 - 원격 Tasty가 없는 Host(SFTP만 쓰고 descriptor가 없음): Explorer는 SFTP 경로 문법을 쓴다. SFTP 프로토콜의 파일 이름은 `/`를 디렉터리 구분자로 쓰고, `/`로 시작하면 절대 경로, 그 밖은 사용자 기본 폴더 기준이며, `..`은 부모 폴더다([draft-ietf-secsh-filexfer-02](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) 6.2 "File Names"). Windows OpenSSH의 SFTP 서버도 Windows 경로를 `/`로 시작하는 `/C:/...` 꼴로 준다(PowerShell/openssh-portable `latestw_all` 브랜치 `contrib/win32/win32compat/misc.c`의 `realpath`: 앞에 `/`를 붙이고 구분자를 `/`로 바꾼다, 주석 "/x:/users/test1 format"). 그래서 경로 잇기와 부모 구하기는 SFTP 경로 규칙으로 하고, 이때도 OS를 추정하지 않는다.
 
-결정 대기: 쓰기(쓰기·이름 바꾸기·삭제, #5)는 기획 초안 4.4(편집 범위, 사용자 몫)가 정해진 뒤.
+결정 대기: 없음. 편집 범위(기획 초안 4.4)는 U8로, 열 수 있는 형식(기획 초안 3.3)은 U7로 정해졌다.
 
 ### 5.4 원격 Tasty attach
 
@@ -197,6 +207,7 @@
 - 1단계 메서드(R3 A): 읽기 전용 원자 메서드 `workspace.overview`. 응답 모양은 워크스페이스마다 `{id, name, subtitle, busy_count, mirror, ws_holder?, surfaces: [{id, kind, title, busy, holder?, granted_seq?}]}`와 capabilities다. 단일 서피스 점유는 `attach.list`의 `attached[]{surface_id, holder, granted_seq}`에 이미 있다. 크레이트 이름·sha를 받기 전에도 이 모양으로 Kotlin 모델을 가정해도 된다.
 - 도메인 타입(R3 B): attach 도메인 메시지와 descriptor의 serde 타입만 담은 tasty 크레이트. Android에서 빌드할 수 있다. 기존 크레이트를 쓰지 않고 새로 만드는 근거(tasty `a8c4d26f4d` 기준): 지금 그 타입이 있는 `tasty-ipc`는 rusqlite bundled·memory·telemetry·agent 의존을 함께 끌고 오고, `tasty-remote`는 ssh 전제다. 2단계(화면 attach)가 이 크레이트를 쓴다.
 - 경로 문법(R3 B): 원격 Tasty는 descriptor에 `path_syntax`(`Posix`·`Windows`)를 알린다. 앱은 원격 경로를 잇거나 부모를 구할 때 이 값을 쓰고, 경로 모양으로 OS를 추정하지 않는다.
+- 대화형 원격 SSH 터미널(기획 초안 4.2 "대화형 SSH 터미널을 넣는다" 행): U9로 넣기로 정해졌다. 순서는 2단계(화면 attach) 뒤이고, 흐름은 5.9에 적는다.
 - 미지원 메서드 코드: 원격 Tasty가 모르는 메서드에는 JSON-RPC 오류 코드 `-32601`(method not found)로 답한다. tasty는 이 값을 R3 (B) 크레이트의 공개 상수 `METHOD_NOT_FOUND`로 둔다(값은 바뀌지 않는다).
 
 제안:
@@ -215,7 +226,6 @@
 결정 대기:
 
 - tasty: R3 (A)·(B)의 반영과 크레이트 이름·sha(`METHOD_NOT_FOUND`·`path_syntax`가 들어 있는 판), 전환한 Tasty의 v2 레코드 게시.
-- 사용자: 대화형 원격 SSH 터미널(기획 초안 4.2 "대화형 SSH 터미널을 넣는다" 행)은 U2가 정하지 않았다. 기획 초안 4.2의 열린 선택지로 남는다.
 
 ### 5.5 권한
 
@@ -324,6 +334,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 - `work/android-terminal`의 CI는 그 위에 다음을 더한다(U1로 develop `ccc0022`에 반영됨): SDK 설치에 `ndk;30.0.16248370`, `rust/`에서 `rustup show active-toolchain || rustup toolchain install`과 `cargo install cargo-ndk --version 4.1.2 --locked`, `Swatinem/rust-cache@v2`(`workspaces: rust`), `rust/`에서 `cargo fmt --all --check`·`cargo clippy --workspace --all-targets --locked -- -D warnings`·`cargo test --workspace --locked`, 그 뒤 기존 Gradle 4단계.
 - 생성된 UniFFI Kotlin은 커밋하지 않는다. `app/build/` 아래에 생기고 `.gitignore`의 `build/`에 들어간다. `spotlessCheck`도 `**/build/**`를 빼고 본다(루트 `build.gradle.kts`).
 - CI의 push 대상 브랜치를 git-flow에 맞추는 일은 U1 반영에서 했다(`ccc0022`: `develop`·`release`·`main`의 push와 그 브랜치로 가는 pull request에서 CI를 돈다).
+- 고지(U10): 앱 안에 한 장짜리 고지 화면을 두고, 같은 고지 파일을 릴리스에도 붙인다. 고지 파일은 `cargo deny`와 함께 CI가 생성·최신 여부를 확인한다(아래 제안).
 
 ### 제안
 
@@ -340,7 +351,7 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 
 ### 결정 대기
 
-- 없음. 라이선스 고지를 보이는 모양은 배포 경로(기획 4.9, 사용자 몫)를 정할 때 함께 정한다.
+- 없음. 라이선스 고지의 모양은 U10으로 정해졌다(위 "정해진 것").
 
 ## 8. 단계
 
@@ -366,3 +377,4 @@ R1에서 함께 요구한 것(전달됨): `tasty-net-ffi`가 `lib`로 다른 cdy
 ## 10. 기획 초안과의 관계
 
 - [기획 초안](app-plan-draft.md) 4.6 표와 5절 `tasty-ssh` 행은 조사 기준 tasty `89efb5602`의 기록이라 고치지 않는다. b103e90의 `tasty-net-ssh`도 아직 시스템 ssh 위임이다(`crates/tasty-net-ssh/Cargo.toml` description). 모바일이 쓰는 내장 SSH는 tasty-network의 후속 계약이다. 2026-11-27 이후의 SSH 구현 방향은 이 문서를 따른다.
+- 기획 초안의 열린 선택지 가운데 3.2(Git 정보 범위)·3.3(뷰어)·4.2(대화형 SSH 터미널)·4.4(파일 편집)와 고지의 모양은 U6~U10(2026-11-28)으로 정해졌다. 기획 초안은 조사 기록이라 고치지 않고, 정해진 내용은 이 문서의 결정 표를 따른다. 4.9(배포 경로)는 아직 열려 있다.
