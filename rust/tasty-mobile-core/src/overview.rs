@@ -4,7 +4,9 @@
 //! Kotlin needs no JSON library and never sees a tasty type. Fields the app does not know are
 //! ignored, so a newer remote that adds fields still parses.
 
-use serde_json::Value;
+use std::collections::HashMap;
+
+use serde_json::value::RawValue;
 use tasty_attach_protocol::{OverviewSurface, OverviewWorkspace, WorkspaceOverview};
 
 /// The workspaces and server capabilities of a remote Tasty, read in one state read.
@@ -49,7 +51,8 @@ pub struct RemoteSurface {
 /// Why a `workspace.overview` reply could not be read.
 #[derive(Debug, PartialEq, Eq, uniffi::Error)]
 pub enum OverviewError {
-    /// The reply is not JSON of the expected shape. `reason` is the JSON error.
+    /// The reply is not JSON of the expected shape. `reason` is the JSON error, or says which
+    /// place holds an array instead of an object.
     Malformed { reason: String },
 }
 
@@ -67,37 +70,53 @@ impl std::error::Error for OverviewError {}
 #[uniffi::export]
 pub fn parse_workspace_overview(json: String) -> Result<RemoteWorkspaceOverview, OverviewError> {
     let malformed = |reason: String| OverviewError::Malformed { reason };
-    let value: Value = serde_json::from_str(&json).map_err(|e| malformed(e.to_string()))?;
-    require_objects(&value).map_err(malformed)?;
+    require_objects(&json).map_err(malformed)?;
     let overview: WorkspaceOverview =
-        serde_json::from_value(value).map_err(|e| malformed(e.to_string()))?;
+        serde_json::from_str(&json).map_err(|e| malformed(e.to_string()))?;
     Ok(RemoteWorkspaceOverview {
         workspaces: overview.workspaces.into_iter().map(workspace).collect(),
         capabilities: overview.capabilities,
     })
 }
 
+/// The keys of a JSON object with their values left unread.
+type RawFields<'a> = HashMap<String, &'a RawValue>;
+
 /// Serde also reads a struct from a JSON array by field position. The reply is keyed
 /// objects, so an array where the overview, a workspace or a surface goes is refused.
-fn require_objects(value: &Value) -> Result<(), String> {
-    let Value::Object(overview) = value else {
+///
+/// This only looks at the first byte of those values and leaves every other value unread,
+/// so the typed read alone decides everything else (missing, repeated or unknown fields).
+fn require_objects(json: &str) -> Result<(), String> {
+    if !starts_an_object(json) {
         return Err("the overview is not a JSON object".to_owned());
-    };
-    let Some(Value::Array(workspaces)) = overview.get("workspaces") else {
-        return Ok(()); // The typed read reports a missing or mistyped list.
+    }
+    let Some(workspaces) = list(json, "workspaces") else {
+        return Ok(()); // The typed read reports what is wrong.
     };
     for (i, ws) in workspaces.iter().enumerate() {
-        let Value::Object(ws) = ws else {
+        if !starts_an_object(ws.get()) {
             return Err(format!("workspace {i} is not a JSON object"));
-        };
-        let Some(Value::Array(surfaces)) = ws.get("surfaces") else {
+        }
+        let Some(surfaces) = list(ws.get(), "surfaces") else {
             continue;
         };
-        if let Some(j) = surfaces.iter().position(|s| !s.is_object()) {
+        if let Some(j) = surfaces.iter().position(|s| !starts_an_object(s.get())) {
             return Err(format!("surface {j} of workspace {i} is not a JSON object"));
         }
     }
     Ok(())
+}
+
+/// The items of the array under `key` of the object `json`, if both are there.
+fn list<'a>(json: &'a str, key: &str) -> Option<Vec<&'a RawValue>> {
+    let fields: RawFields<'a> = serde_json::from_str(json).ok()?;
+    let value: &'a RawValue = fields.get(key).copied()?;
+    serde_json::from_str(value.get()).ok()
+}
+
+fn starts_an_object(json: &str) -> bool {
+    json.trim_start().starts_with('{')
 }
 
 fn workspace(ws: OverviewWorkspace) -> RemoteWorkspace {
@@ -219,6 +238,19 @@ mod tests {
     }
 
     #[test]
+    fn skips_a_deeply_nested_unknown_field() {
+        let deep = format!("{}{}", "[".repeat(128), "]".repeat(128));
+        let json = format!(r#"{{"workspaces": [], "capabilities": [], "extra": {deep}}}"#);
+        assert_eq!(
+            parse(&json),
+            Ok(RemoteWorkspaceOverview {
+                workspaces: vec![],
+                capabilities: vec![],
+            })
+        );
+    }
+
+    #[test]
     fn rejects_a_reply_of_the_wrong_shape() {
         // Not JSON.
         assert!(is_malformed("workspaces"));
@@ -237,6 +269,14 @@ mod tests {
             r#"{"workspaces": [{"id": 1, "name": "a", "subtitle": "", "busy_count": 0,
                 "mirror": false, "surfaces": [[2, "terminal", "t", false, null, null]]}],
                 "capabilities": []}"#
+        ));
+        // A known field twice: the typed read refuses it.
+        assert!(is_malformed(
+            r#"{"workspaces":[],"capabilities":["attach"],"capabilities":[]}"#
+        ));
+        // Only the raw value marker key: the fields are missing, not read from the string.
+        assert!(is_malformed(
+            r#"{"$serde_json::private::RawValue": "{\"workspaces\":[],\"capabilities\":[]}"}"#
         ));
         // Wrong types.
         assert!(is_malformed(r#"{"workspaces": {}, "capabilities": []}"#));
