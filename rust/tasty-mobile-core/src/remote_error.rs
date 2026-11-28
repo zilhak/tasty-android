@@ -20,7 +20,8 @@ pub enum RemoteErrorKind {
         code: Option<String>,
         message: Option<String>,
     },
-    /// Not a JSON object, or `message` is not a string.
+    /// Not a JSON object, or a code other than `METHOD_NOT_FOUND` with a `message` that is
+    /// not a string.
     Malformed,
 }
 
@@ -30,13 +31,7 @@ pub fn classify_remote_error(error_json: String) -> RemoteErrorKind {
     let Ok(mut fields) = serde_json::from_str::<HashMap<String, Box<RawValue>>>(&error_json) else {
         return RemoteErrorKind::Malformed;
     };
-    let message = match fields.remove("message") {
-        None => None,
-        Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
-            Ok(message) => message,
-            Err(_) => return RemoteErrorKind::Malformed,
-        },
-    };
+    // The code decides first: a missing method stays a missing method whatever the message.
     let code = fields
         .remove("code")
         .map(|raw| raw.get().to_owned())
@@ -48,10 +43,16 @@ pub fn classify_remote_error(error_json: String) -> RemoteErrorKind {
         )
     });
     if method_not_found {
-        RemoteErrorKind::MethodNotFound
-    } else {
-        RemoteErrorKind::Other { code, message }
+        return RemoteErrorKind::MethodNotFound;
     }
+    let message = match fields.remove("message") {
+        None => None,
+        Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
+            Ok(message) => message,
+            Err(_) => return RemoteErrorKind::Malformed,
+        },
+    };
+    RemoteErrorKind::Other { code, message }
 }
 
 #[cfg(test)]
@@ -77,6 +78,11 @@ mod tests {
         );
         assert_eq!(
             classify(r#"{"code":-32601}"#),
+            RemoteErrorKind::MethodNotFound
+        );
+        // The code decides before the shape of the message.
+        assert_eq!(
+            classify(r#"{"code": -32601, "message": 5}"#),
             RemoteErrorKind::MethodNotFound
         );
         assert_eq!(
