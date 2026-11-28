@@ -138,6 +138,30 @@ abstract class UniffiBindgen : DefaultTask() {
     }
 }
 
+/**
+ * Copies the license notice (U10) from the repo root into a generated assets folder, byte for byte,
+ * so the APK carries the committed file. scripts/notices.sh writes and checks that file.
+ */
+abstract class CopyNotice : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val notice: RegularFileProperty
+
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        notice.get().asFile.copyTo(out.resolve(NOTICE_ASSET))
+    }
+
+    companion object {
+        const val NOTICE_ASSET = "THIRD_PARTY_NOTICES.txt"
+    }
+}
+
 val rustWorkspace = rootProject.layout.projectDirectory.dir("rust")
 // Pass -Ptasty.rustAbis=x86_64 to build a single ABI while iterating on an emulator.
 val rustAbis =
@@ -171,8 +195,15 @@ val uniffiBindgen =
         outputDir.set(layout.buildDirectory.dir("generated/source/uniffi"))
     }
 
+val copyNotice =
+    tasks.register<CopyNotice>("copyNotice") {
+        notice.set(rootProject.layout.projectDirectory.file(CopyNotice.NOTICE_ASSET))
+        outputDir.set(layout.buildDirectory.dir("generated/assets/notice"))
+    }
+
 androidComponents {
     onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(copyNotice, CopyNotice::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoNdkBuild, CargoNdkBuild::outputDir)
         variant.sources.kotlin?.addGeneratedSourceDirectory(uniffiBindgen, UniffiBindgen::outputDir)
     }
