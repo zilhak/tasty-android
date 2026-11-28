@@ -27,6 +27,9 @@ pub enum RemoteErrorKind {
 }
 
 /// Sorts a remote error object given as JSON text.
+///
+/// Only an integer code counts: tasty sends error codes as i32, so `-32601.0` or `-3.2601e4`
+/// is an ordinary remote error.
 #[uniffi::export]
 pub fn classify_remote_error(error_json: String) -> RemoteErrorKind {
     let Ok(mut fields) = serde_json::from_str::<HashMap<String, Box<RawValue>>>(&error_json) else {
