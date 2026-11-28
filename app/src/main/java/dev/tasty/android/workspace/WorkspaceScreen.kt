@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -43,6 +44,7 @@ import dev.tasty.android.core.SurfaceNode
 import dev.tasty.android.core.TabInfo
 import dev.tasty.android.terminal.TerminalStatus
 import dev.tasty.android.terminal.TerminalView
+import dev.tasty.android.ui.AboutScreen
 import dev.tasty.android.ui.InputPopup
 import dev.tasty.android.ui.ListPopup
 import dev.tasty.android.ui.PopupItem
@@ -54,7 +56,8 @@ import dev.tasty.android.ui.TastyTokens
  * layout. The Tasty logo sits at the end of the tab bar of the pane in the top right corner.
  *
  * Menus open as a [ListPopup] over the whole screen area. That area ends above an open on-screen
- * keyboard, so the keyboard stays open and the popup sits above it.
+ * keyboard, so the keyboard stays open and the popup sits above it. A [Page] such as About covers
+ * the workspace, which keeps running under it; going back closes the page.
  */
 @Composable
 fun WorkspaceScreen(
@@ -64,8 +67,17 @@ fun WorkspaceScreen(
     val snapshot by model.snapshot.collectAsStateWithLifecycle()
     val statuses by model.statuses.collectAsStateWithLifecycle()
     var popup by remember { mutableStateOf<Popup?>(null) }
+    var page by rememberSaveable { mutableStateOf<Page?>(null) }
     val labels = MenuLabels.load()
-    val context = WorkspaceContext(snapshot, statuses, model, labels, popupOpen = popup != null) { popup = it }
+    val context =
+        WorkspaceContext(
+            snapshot,
+            statuses,
+            model,
+            labels,
+            popupOpen = popup != null || page != null,
+            openPage = { page = it },
+        ) { popup = it }
     Surface(modifier = modifier.fillMaxSize(), color = TastyTokens.bgApp) {
         Box(
             Modifier
@@ -98,8 +110,22 @@ fun WorkspaceScreen(
                     Unit
                 }
             }
+            when (page) {
+                Page.About -> {
+                    AboutScreen(onOpenLicenses = {}, onClose = { page = null })
+                }
+
+                null -> {
+                    Unit
+                }
+            }
         }
     }
+}
+
+/** A page that covers the workspace, opened from the logo menu. */
+internal enum class Page {
+    About,
 }
 
 /** A popup over the screen: a menu ([ListPopup]) or a short text entry ([InputPopup]). */
@@ -124,8 +150,9 @@ internal class WorkspaceContext(
     val statuses: Map<Long, TerminalStatus>,
     val model: WorkspaceViewModel,
     val labels: MenuLabels,
-    /** While a popup is open the terminal leaves the focus to it. */
+    /** While a popup or a page is open the terminal leaves the focus to it. */
     val popupOpen: Boolean,
+    val openPage: (Page) -> Unit,
     val openPopup: (Popup) -> Unit,
 ) {
     val panes = snapshot.layout.nodes.associateBy { it.nodeId() }

@@ -252,6 +252,7 @@ internal class MenuLabels(
     val moveLeft: String,
     val moveRight: String,
     val closeTab: String,
+    val about: String,
 ) {
     companion object {
         @Composable
@@ -275,6 +276,7 @@ internal class MenuLabels(
                     moveLeft = res.getString(R.string.tab_move_left),
                     moveRight = res.getString(R.string.tab_move_right),
                     closeTab = res.getString(R.string.tab_close),
+                    about = res.getString(R.string.about),
                 )
             }
         }
@@ -314,7 +316,7 @@ private fun tabMenu(
     )
 }
 
-/** The menu the logo opens: workspaces, then the focused pane's and surface's actions. */
+/** The menu the logo opens: workspaces, then the focused pane's and surface's actions, then About. */
 private fun tastyMenu(
     context: WorkspaceContext,
     title: String,
@@ -360,5 +362,6 @@ private fun tastyMenu(
     }
     val workspaceId = snapshot.activeWorkspace.toLong()
     items += PopupItem.Action(labels.closeWorkspace, rule = true) { model.closeWorkspace(workspaceId) }
+    items += PopupItem.Action(labels.about, rule = true) { context.openPage(Page.About) }
     return Popup.Menu(title, items)
 }

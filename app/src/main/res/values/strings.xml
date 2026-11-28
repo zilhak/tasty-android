@@ -21,4 +21,7 @@
   <string name="cancel">Cancel</string>
   <string name="tab_move_left">Move left</string>
   <string name="tab_move_right">Move right</string>
+  <string name="about">About</string>
+  <string name="about_version">Version %1$s</string>
+  <string name="open_source_licenses">Open source licenses</string>
 </resources>
