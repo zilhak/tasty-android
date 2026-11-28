@@ -15,7 +15,8 @@
 #   3. the Rust standard library (notices/rust-std/)
 #   4. where to get the source of the MPL-2.0 crates (notices/mpl-2.0-source.txt)
 #   5. Android libraries in the release runtime classpath, mapped by notices/gradle-licenses.tsv
-#   6. JNA (the rows of gradle-licenses.tsv whose files are in notices/jna/)
+#   6. JNA (the rows of gradle-licenses.tsv whose files are in notices/jna/), and the libffi license
+#      that its native library carries (notices/jna/libffi-LICENSE)
 # Nothing that changes between runs or machines (versions of tools, paths, dates) goes in.
 set -euo pipefail
 export LC_ALL=C
@@ -202,6 +203,13 @@ gradle_groups() {
     done
 }
 
+# JNA's native library links libffi in; its license follows the JNA texts.
+jna_libffi() {
+    rule '-'
+    echo "JNA's native library (libjnidispatch) includes libffi, under this license:"
+    print_files jna/libffi-LICENSE
+}
+
 build() {
     check_license_lists
     run_cargo_about
@@ -225,6 +233,7 @@ build() {
         gradle_groups 0
         section "Java Native Access (JNA)"
         gradle_groups 1
+        jna_libffi
     } | cat -s | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$1"
 }
 
