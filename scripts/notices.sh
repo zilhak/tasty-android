@@ -46,17 +46,85 @@ section() {
     echo
 }
 
-# The quoted strings of a TOML array that starts at the line "$2 = [" in file $1, in order.
+# The strings of the TOML array "$3 = [ ... ]" in table [$2] of file $1 ("" for the top level), in
+# order. Fails on what it cannot read: no such array, the key twice in the table, or anything in the
+# array other than double-quoted strings without escapes, commas and comments.
 toml_list() {
-    awk -v key="$2" '
-        $0 == key " = [" { inside = 1; next }
-        inside && /^]/ { exit }
-        inside && match($0, /"[^"]*"/) { print substr($0, RSTART + 1, RLENGTH - 2) }
+    awk -v table="$2" -v key="$3" '
+        function fail(msg) {
+            print FILENAME ":" FNR ": " msg > "/dev/stderr"
+            bad = 1
+            exit 1
+        }
+        !inside && /^[ \t]*\[/ {
+            t = $0
+            sub(/^[ \t]*\[[ \t]*/, "", t)
+            sub(/[ \t]*\].*$/, "", t)
+            current = t
+            next
+        }
+        !inside {
+            if (current != table || $0 !~ "^[ \t]*" key "[ \t]*=") next
+            if (found) fail(key " is set twice")
+            found = 1
+            line = $0
+            sub("^[ \t]*" key "[ \t]*=[ \t]*", "", line)
+            if (substr(line, 1, 1) != "[") fail(key " is not an array")
+            line = substr(line, 2)
+            inside = 1
+            value = 0
+        }
+        inside {
+            if (!started) started = 1
+            else line = $0
+            while (1) {
+                sub(/^[ \t]+/, "", line)
+                c = substr(line, 1, 1)
+                if (line == "" || c == "#") break
+                if (c == "]") {
+                    inside = 0
+                    started = 0
+                    line = substr(line, 2)
+                    sub(/^[ \t]+/, "", line)
+                    if (line != "" && substr(line, 1, 1) != "#") fail("text after the end of " key)
+                    break
+                }
+                if (c == ",") {
+                    if (!value) fail("a comma without a value before it in " key)
+                    value = 0
+                    line = substr(line, 2)
+                    continue
+                }
+                if (c != "\"") fail("not a quoted string in " key ": " line)
+                if (value) fail("no comma between two values in " key)
+                line = substr(line, 2)
+                end = index(line, "\"")
+                if (end == 0) fail("a string without its closing quote in " key)
+                text = substr(line, 1, end - 1)
+                if (text ~ /\\/) fail("an escape in a string of " key)
+                print text
+                value = 1
+                line = substr(line, end + 1)
+            }
+        }
+        END {
+            if (bad) exit 1
+            if (inside) { print FILENAME ": " key " has no closing ]" > "/dev/stderr"; exit 1 }
+            if (!found) { print FILENAME ": no " key " array" > "/dev/stderr"; exit 1 }
+        }
     ' "$1"
 }
 
-# Rows of a notices TSV without comments.
-rows() { grep -v '^#' "$1" | grep -v '^$' || true; }
+# Rows of a notices TSV without comments and blank lines. Fails when the file cannot be read or has
+# no row. Write the rows to a file; do not call this in a pipeline, where a failure would not stop
+# the script.
+rows() {
+    local name=${1#"$root"/} out
+    [ -f "$1" ] || die "$name is missing"
+    out=$(awk '!/^#/ && !/^$/' "$1") || die "cannot read $name"
+    [ -n "$out" ] || die "$name has no rows"
+    printf '%s\n' "$out"
+}
 
 print_files() {
     local f
@@ -70,9 +138,9 @@ print_files() {
 
 check_license_lists() {
     local deny about
-    deny=$(toml_list "$root/rust/deny.toml" allow)
-    about=$(toml_list "$root/rust/about.toml" accepted)
-    [ -n "$deny" ] || die "no allow list in rust/deny.toml"
+    deny=$(toml_list "$root/rust/deny.toml" licenses allow) || die "cannot read allow in rust/deny.toml"
+    about=$(toml_list "$root/rust/about.toml" "" accepted) || die "cannot read accepted in rust/about.toml"
+    [ -n "$deny" ] || die "the allow list in rust/deny.toml is empty"
     if [ "$deny" != "$about" ]; then
         echo "allow in rust/deny.toml and accepted in rust/about.toml differ:" >&2
         diff <(echo "$deny") <(echo "$about") >&2 || true
@@ -99,9 +167,9 @@ run_cargo_about() {
 
 # Crates that fell back to a canonical text get the files listed in notices/rust-crates.tsv instead.
 fallback_crates() {
-    local tsv=$notices/rust-crates.tsv
+    rows "$notices/rust-crates.tsv" > "$tmp/rust-rows"
     cut -f1,2 "$tmp/fallback" | sort -u > "$tmp/fallback-crates"
-    rows "$tsv" | cut -f1,2 | sort -u > "$tmp/listed-crates"
+    cut -f1,2 "$tmp/rust-rows" | sort -u > "$tmp/listed-crates"
     if ! cmp -s "$tmp/fallback-crates" "$tmp/listed-crates"; then
         echo "crates without a license text in their source and notices/rust-crates.tsv differ" >&2
         echo "(< only in the cargo-about output, > only in the tsv):" >&2
@@ -109,11 +177,11 @@ fallback_crates() {
         exit 1
     fi
     local files
-    rows "$tsv" | cut -f3 | awk '!seen[$0]++' | while IFS= read -r files; do
+    cut -f3 "$tmp/rust-rows" | awk '!seen[$0]++' | while IFS= read -r files; do
         echo
         rule '-'
-        rows "$tsv" | awk -F'\t' -v f="$files" '$3 == f { print $1 "\t" $2 }' > "$tmp/group"
-        awk -F'\t' 'NR == FNR { want[$1 "\t" $2] = 1; next } want[$1 "\t" $2] { print $3 }' \
+        awk -F'\t' -v f="$files" '$3 == f { print $1 "\t" $2 }' "$tmp/rust-rows" > "$tmp/group"
+        awk -F'\t' -v first="$tmp/group" 'FILENAME == first { want[$1 "\t" $2] = 1; next } want[$1 "\t" $2] { print $3 }' \
             "$tmp/group" "$tmp/fallback" | awk '!seen[$0]++' | paste -sd ',' - | sed 's/,/, /g'
         echo "Used by:"
         awk -F'\t' '{ print "  " $1 " " $2 }' "$tmp/group"
@@ -143,8 +211,9 @@ mpl_source() {
 }
 
 # group:module:version of every external module in :app's releaseRuntimeClasspath. Constraints are
-# left out, a requested version that was raised takes the resolved one, and BOMs (modules named
-# *-bom) are left out because they ship nothing.
+# left out and a requested module that was replaced takes the resolved one ("a:b:1 -> 2" is a:b:2,
+# "a:b:1 -> c:d:2" is c:d:2). A module that did not resolve (FAILED), a project dependency, or a
+# line it cannot read fails.
 gradle_coordinates() {
     local gradlew=${NOTICES_GRADLEW:-$root/gradlew}
     (cd "$root" && "$gradlew" :app:dependencies --configuration releaseRuntimeClasspath --console=plain) \
@@ -152,32 +221,45 @@ gradle_coordinates() {
     awk '
         /^releaseRuntimeClasspath - / { inside = 1; next }
         inside && /^$/ { exit }
+        function bad(msg) { print msg ": " $0 > "/dev/stderr"; failed = 1 }
         inside && match($0, /[+\\]--- /) {
             t = substr($0, RSTART + 5)
             if (t ~ / \(c\)$/) next
+            if (t ~ / FAILED$/) { bad("a module that did not resolve"); next }
             sub(/ \((\*|n)\)$/, "", t)
-            if (t ~ /^project /) { print "project dependency: " t > "/dev/stderr"; failed = 1; next }
+            if (t ~ /^project /) { bad("a project dependency"); next }
             n = split(t, side, " -> ")
-            split(side[1], c, ":")
-            v = n == 2 ? side[2] : c[3]
-            sub(/ .*/, "", v)
-            print c[1] ":" c[2] ":" v
+            m = split(side[1], c, ":")
+            if (n == 1 && m == 3) coordinate = side[1]
+            else if (n == 2 && (m == 2 || m == 3) && split(side[2], r, ":") == 1) coordinate = c[1] ":" c[2] ":" side[2]
+            else if (n == 2 && (m == 2 || m == 3) && split(side[2], r, ":") == 3) coordinate = side[2]
+            else { bad("a line it cannot read"); next }
+            if (coordinate !~ /^[A-Za-z0-9._-]+:[A-Za-z0-9._-]+:[A-Za-z0-9._+-]+$/) { bad("a line it cannot read"); next }
+            print coordinate
         }
         END { exit failed }
-    ' "$tmp/gradle" | sort -u | sort -t: -k1,1 -k2,2 -k3,3 | grep -v -E '^[^:]+:[^:]+-bom:' \
-        > "$tmp/coordinates" \
+    ' "$tmp/gradle" | sort -u | sort -t: -k1,1 -k2,2 -k3,3 > "$tmp/coordinates" \
         || die "could not read the releaseRuntimeClasspath report"
     [ -s "$tmp/coordinates" ] || die "the releaseRuntimeClasspath report lists no module"
 }
 
-# Writes "row<TAB>coordinate" for each coordinate: the gradle-licenses.tsv row of its key.
+# Writes "row<TAB>coordinate" for each coordinate: the gradle-licenses.tsv row of its key. A
+# group:module whose row has the license "platform" is a BOM, which ships nothing; it is left out.
 map_coordinates() {
     rows "$notices/gradle-licenses.tsv" > "$tmp/gradle-rows"
-    awk -F'\t' '
-        NR == FNR { row[$1] = FNR; next }
+    awk -F'\t' -v first="$tmp/gradle-rows" '
+        FILENAME == first {
+            row[$1] = FNR
+            if ($2 == "platform") {
+                if ($1 !~ /^[^:]+:[^:]+$/) { print "a platform row needs a group:module key: " $0 > "/dev/stderr"; failed = 1 }
+                platform[$1] = 1
+            }
+            next
+        }
         {
             split($0, c, ":")
             key = c[1] ":" c[2]
+            if (key in platform) next
             if (key in row) print row[key] "\t" $0
             else if (c[1] in row) print row[c[1]] "\t" $0
             else { print "no row in notices/gradle-licenses.tsv for " $0 > "/dev/stderr"; failed = 1 }
@@ -189,15 +271,16 @@ map_coordinates() {
 # Prints the libraries whose files are (jna = 1) or are not (jna = 0) in notices/jna/.
 gradle_groups() {
     local jna=$1 files
-    awk -F'\t' -v jna="$jna" '(($4 ~ /^jna\//) ? 1 : 0) == jna { print $4 }' "$tmp/gradle-rows" \
+    awk -F'\t' -v jna="$jna" '$2 != "platform" && (($4 ~ /^jna\//) ? 1 : 0) == jna { print $4 }' "$tmp/gradle-rows" \
         | awk '!seen[$0]++' | while IFS= read -r files; do
         awk -F'\t' -v f="$files" '$4 == f { print FNR }' "$tmp/gradle-rows" > "$tmp/rows-of-group"
-        awk -F'\t' 'NR == FNR { want[$1] = 1; next } want[$1]' "$tmp/rows-of-group" "$tmp/mapped" > "$tmp/libs"
+        awk -F'\t' -v first="$tmp/rows-of-group" 'FILENAME == first { want[$1] = 1; next } want[$1]' \
+            "$tmp/rows-of-group" "$tmp/mapped" > "$tmp/libs"
         [ -s "$tmp/libs" ] || continue
         rule '-'
         awk -F'\t' -v f="$files" '$4 == f { print $2; exit }' "$tmp/gradle-rows"
         echo "Used by:"
-        awk -F'\t' 'NR == FNR { holder[FNR] = $3; next } { print "  " $2 ", " holder[$1] }' \
+        awk -F'\t' -v first="$tmp/gradle-rows" 'FILENAME == first { holder[FNR] = $3; next } { print "  " $2 ", " holder[$1] }' \
             "$tmp/gradle-rows" "$tmp/libs"
         print_files "$files"
     done

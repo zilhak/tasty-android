@@ -1,5 +1,6 @@
 # License of each Android library in the release runtime classpath, read from its POM. A key is a
 # group or group:module; group:module wins. scripts/notices.sh fails when a library has no key.
+# The license "platform" marks a BOM (key group:module only): it ships nothing and is left out.
 # Libraries with the same files are listed together, in the order of their first row, and the
 # files (relative to this folder) are printed once after them.
 # key	license	holder (from the POM)	files
@@ -34,3 +35,6 @@ org.jetbrains.kotlin	Apache-2.0	Kotlin Team	Apache-2.0.txt
 org.jetbrains.kotlinx	Apache-2.0	JetBrains Team	Apache-2.0.txt
 org.jspecify	Apache-2.0	Kevin Bourrillion	Apache-2.0.txt
 net.java.dev.jna:jna	Apache-2.0 OR LGPL-2.1-or-later, used under Apache-2.0	Timothy Wall, Matthias Bläsing	jna/LICENSE jna/AL2.0
+androidx.compose:compose-bom	platform	-	-
+org.jetbrains.kotlinx:kotlinx-coroutines-bom	platform	-	-
+org.jetbrains.kotlinx:kotlinx-serialization-bom	platform	-	-
