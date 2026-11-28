@@ -61,6 +61,15 @@ jobs:
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --locked
 
+      # The host Clippy above does not see cfg(target_os = "android") code. cargo-ndk supplies the
+      # NDK clang that dependencies with C code need (cc today, ring once tasty-network brings it);
+      # same NDK and API level as the cargoNdkBuild task.
+      - name: Clippy for Android (aarch64-linux-android via cargo-ndk)
+        working-directory: rust
+        run: |
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/30.0.16248370" \
+            cargo ndk -t arm64-v8a -P 29 clippy --workspace --all-targets --locked -- -D warnings
+
       # Caches Gradle state and checks the wrapper jar checksum.
       - uses: gradle/actions/setup-gradle@v6
         with:
