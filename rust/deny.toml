@@ -1,0 +1,40 @@
+# cargo deny policy for the licenses, bans and sources checks. Run from rust/:
+#   cargo deny --locked check licenses bans sources
+# Advisories are left out: a new advisory fails commits that changed nothing. Started from the
+# tasty-network deny.toml, with the license list narrowed to what the app's graph uses.
+
+[graph]
+# The two Android ABIs that the app ships. Dev dependencies are not linked into the app.
+targets = ["aarch64-linux-android", "x86_64-linux-android"]
+exclude-dev = true
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Only licenses that crates in the graph above use. Add one when a new dependency needs it, and
+# keep it out of the list if the app cannot take it.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception", # ar_archive_writer, build dependency of psm
+  "BSD-3-Clause",                   # curve25519-dalek, ed25519-dalek, subtle
+  "MPL-2.0",                        # UniFFI runtime and option-ext; file-level copyleft, linked unchanged
+  "Unicode-3.0",                    # ICU4X crates, unicode-ident
+  "Unicode-DFS-2016",               # finl_unicode, wezterm-bidi
+  "WTFPL",                          # terminfo
+]
+
+[bans]
+# Duplicate versions of indirect dependencies are a warning.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# Only crates.io, plus the two git repositories that Cargo.toml pins by rev.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = [
+  "https://github.com/zilhak/tasty",
+  "https://github.com/zilhak/tasty-network",
+]
