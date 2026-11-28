@@ -304,12 +304,17 @@ mod write {
     use super::{PeerFileError, read_record};
 
     /// Publishes the record of `id` at `path` unless one is there.
+    ///
+    /// Before the rename the folders above `dir` are synced (see [`prepare_dir`]): whether
+    /// another call or an earlier process that made one of them finished syncing its parent
+    /// cannot be known, so every publish syncs the two levels above `dir`.
     pub(super) fn pin(
         dir: &Path,
         peer: &PeerRef,
         path: &Path,
         id: &DeviceId,
     ) -> Result<PinOutcome, PeerFileError> {
+        prepare_dir(dir)?;
         let temp = write_temp(dir, peer, id)?;
         match rename_noreplace(&temp, path) {
             Ok(()) => {
@@ -341,12 +346,17 @@ mod write {
     }
 
     /// Replaces the record at `path` with the record of `id`.
+    ///
+    /// Like [`pin`], it syncs the two levels above `dir` before the rename, because whether
+    /// another call or an earlier process that made one of them finished syncing its parent
+    /// cannot be known.
     pub(super) fn replace(
         dir: &Path,
         peer: &PeerRef,
         path: &Path,
         id: &DeviceId,
     ) -> Result<(), PeerFileError> {
+        prepare_dir(dir)?;
         let temp = write_temp(dir, peer, id)?;
         if let Err(e) = std::fs::rename(&temp, path) {
             remove_temp(&temp);
@@ -355,10 +365,44 @@ mod write {
         sync_dir(dir)
     }
 
-    /// Writes and syncs the record of `id` in a new temporary file in `dir` (created when
-    /// missing, private to the app) and returns its path. A failure removes the file.
+    /// Creates `dir` when missing and syncs the folders that hold it, so its entry and the
+    /// entries of the folders above it survive a power loss: the two levels above `dir`
+    /// always ([`parents_to_sync`]), and the parent of any further folder this call tried
+    /// to create.
+    fn prepare_dir(dir: &Path) -> Result<(), PeerFileError> {
+        let fixed = parents_to_sync(dir);
+        create_dirs(dir, &fixed)?;
+        for parent in &fixed {
+            sync_parent(parent)?;
+        }
+        Ok(())
+    }
+
+    /// The folders synced before every publish in `dir`: its parent and the folder above
+    /// that (in the app `net` and `noBackupFilesDir`), as many as there are. An empty parent
+    /// of a relative path is the current folder, and nothing is above it.
+    pub(super) fn parents_to_sync(dir: &Path) -> Vec<PathBuf> {
+        let mut parents = Vec::new();
+        let mut folder = dir;
+        while parents.len() < 2 {
+            match folder.parent() {
+                Some(parent) if parent.as_os_str().is_empty() => {
+                    parents.push(PathBuf::from("."));
+                    break;
+                }
+                Some(parent) => {
+                    parents.push(parent.to_owned());
+                    folder = parent;
+                }
+                None => break,
+            }
+        }
+        parents
+    }
+
+    /// Writes and syncs the record of `id` in a new temporary file in `dir`, which must exist,
+    /// and returns its path. A failure removes the file.
     fn write_temp(dir: &Path, peer: &PeerRef, id: &DeviceId) -> Result<PathBuf, PeerFileError> {
-        create_dirs(dir)?;
         let temp = dir.join(temp_name(peer));
         let mut file = OpenOptions::new()
             .write(true)
@@ -379,9 +423,17 @@ mod write {
 
     /// Creates `dir` and its missing ancestors one level at a time, private to the app, and
     /// returns the folders this call created, outermost first. For every folder it tried to
-    /// create, even one another call created at the same time, the folder above is synced so
-    /// the new entry survives a power loss. Folders that were already there are left alone.
-    pub(super) fn create_dirs(dir: &Path) -> Result<Vec<PathBuf>, PeerFileError> {
+    /// create, even one another call created at the same time, the folder above is synced,
+    /// unless it is in `synced_later`, which the caller syncs itself.
+    ///
+    /// A folder that is already there may have been made by another call or an earlier process
+    /// that has not synced, or failed to sync, its parent; this call cannot tell. So the
+    /// callers that publish a record always sync the two levels above `dir`
+    /// ([`parents_to_sync`]), whatever this function created.
+    pub(super) fn create_dirs(
+        dir: &Path,
+        synced_later: &[PathBuf],
+    ) -> Result<Vec<PathBuf>, PeerFileError> {
         let mut missing = Vec::new();
         for folder in dir.ancestors() {
             if folder.as_os_str().is_empty() {
@@ -404,11 +456,18 @@ mod write {
                 Some(parent) if !parent.as_os_str().is_empty() => parent,
                 _ => Path::new("."),
             };
-            File::open(parent)
-                .and_then(|d| d.sync_all())
-                .map_err(|e| PeerFileError::io("sync the parent folder", parent, e))?;
+            if !synced_later.iter().any(|later| later == parent) {
+                sync_parent(parent)?;
+            }
         }
         Ok(created)
+    }
+
+    /// Syncs `parent` so the folder entries in it survive a power loss.
+    fn sync_parent(parent: &Path) -> Result<(), PeerFileError> {
+        File::open(parent)
+            .and_then(|d| d.sync_all())
+            .map_err(|e| PeerFileError::io("sync the parent folder", parent, e))
     }
 
     /// A temporary file name no other call uses: dot first and `.tmp` last, so it is never a
@@ -738,22 +797,69 @@ mod tests {
         {
             let (fresh, inner) = (dir.0.join("fresh"), dir.0.join("fresh").join("peers"));
             assert_eq!(
-                write::create_dirs(&inner).expect("create"),
+                write::create_dirs(&inner, &[]).expect("create"),
                 vec![fresh.clone(), inner.clone()]
             );
             assert_eq!(
-                write::create_dirs(&inner).expect("again"),
+                write::create_dirs(&inner, &[]).expect("again"),
                 Vec::<PathBuf>::new()
             );
             let other = fresh.join("other");
             assert_eq!(
-                write::create_dirs(&other).expect("one level"),
+                write::create_dirs(&other, &write::parents_to_sync(&other)).expect("one level"),
                 vec![other.clone()]
             );
             assert_eq!(
-                write::create_dirs(&peers).expect("existing"),
+                write::create_dirs(&peers, &[]).expect("existing"),
                 Vec::<PathBuf>::new()
             );
+        }
+    }
+
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "android")),
+        ignore = "writes records with renameat2, Linux and Android only"
+    )]
+    #[test]
+    fn every_publish_syncs_the_two_levels_above_the_folder() {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            let dir = TempDir::new("parents");
+            let peers = dir.0.join("net").join("peers");
+            assert_eq!(
+                write::parents_to_sync(&peers),
+                vec![dir.0.join("net"), dir.0.clone()]
+            );
+            assert_eq!(
+                write::parents_to_sync(Path::new("/a/b")),
+                vec![PathBuf::from("/a"), PathBuf::from("/")]
+            );
+            assert_eq!(
+                write::parents_to_sync(Path::new("/peers")),
+                vec![PathBuf::from("/")]
+            );
+            assert_eq!(
+                write::parents_to_sync(Path::new("/")),
+                Vec::<PathBuf>::new()
+            );
+            assert_eq!(
+                write::parents_to_sync(Path::new("net/peers")),
+                vec![PathBuf::from("net"), PathBuf::from(".")]
+            );
+            assert_eq!(
+                write::parents_to_sync(Path::new("peers")),
+                vec![PathBuf::from(".")]
+            );
+            // A folder made by someone else is synced above all the same: the publish
+            // into an existing folder goes through the same path and succeeds.
+            std::fs::create_dir_all(&peers).expect("create the folders");
+            let store = FilePeerKeyStore::new(&peers);
+            assert_eq!(
+                store.pin_if_absent(&peer("p1"), &id(1)).expect("pin"),
+                PinOutcome::Inserted
+            );
+            store.replace(&peer("p1"), &id(2)).expect("replace");
+            assert_eq!(store.get(&peer("p1")).expect("get"), Some(id(2)));
         }
     }
 
