@@ -12,11 +12,12 @@
 #   1. the app's own license (LICENSE)
 #   2. Rust crates linked into the app's native library: cargo-about with rust/about.toml and
 #      rust/about.hbs, plus the texts in notices/rust-crates.tsv for crates whose source lacks one
-#   3. the Rust standard library (notices/rust-std/)
+#   3. the Rust standard library (notices/rust-std/, texts of the toolchain in notices/rust-std/VERSION)
 #   4. where to get the source of the MPL-2.0 crates (notices/mpl-2.0-source.txt)
 #   5. Android libraries in the release runtime classpath, mapped by notices/gradle-licenses.tsv
 #   6. JNA (the rows of gradle-licenses.tsv whose files are in notices/jna/), and the libffi license
-#      that its native library carries (notices/jna/libffi-LICENSE)
+#      that its native library carries (notices/jna/libffi-LICENSE); texts of the JNA version in
+#      notices/jna/VERSION
 # Nothing that changes between runs or machines (versions of tools, paths, dates) goes in.
 set -euo pipefail
 export LC_ALL=C
@@ -189,6 +190,33 @@ fallback_crates() {
     done
 }
 
+# The version written in notices/$1/VERSION.
+text_version() {
+    local file=$notices/$1/VERSION version
+    [ -f "$file" ] || die "notices/$1/VERSION is missing"
+    version=$(tr -d '\r\n' < "$file")
+    [ -n "$version" ] || die "notices/$1/VERSION is empty"
+    echo "$version"
+}
+
+# The texts in notices/rust-std/ and notices/jna/ are those of one version each. Fails when the
+# toolchain or the JNA dependency has moved to another version.
+check_text_versions() {
+    local texts used
+    texts=$(text_version rust-std) || exit 1
+    used=$(awk -F'"' '/^channel[ \t]*=/ { print $2 }' "$root/rust/rust-toolchain.toml")
+    [ -n "$used" ] || die "no channel in rust/rust-toolchain.toml"
+    [ "$texts" = "$used" ] || die "notices/rust-std/ has the texts of Rust $texts, but rust/rust-toolchain.toml" \
+        "uses $used: take them again from share/doc/rust of the $used toolchain and write $used in" \
+        "notices/rust-std/VERSION"
+    texts=$(text_version jna) || exit 1
+    used=$(awk -F: '$1 == "net.java.dev.jna" && $2 == "jna" { print $3 }' "$tmp/coordinates")
+    [ -n "$used" ] || die "net.java.dev.jna:jna is not in the release runtime classpath; update the JNA part"
+    [ "$texts" = "$used" ] || die "notices/jna/ has the texts of JNA $texts, but the app uses JNA $used: take the" \
+        "license files again from the $used artifact and the libffi license from its source tag, and" \
+        "write $used in notices/jna/VERSION"
+}
+
 rust_std() {
     echo "The Rust standard library (std, core, alloc and the crates they use) is linked into the app's"
     echo "native library."
@@ -297,6 +325,7 @@ build() {
     check_license_lists
     run_cargo_about
     gradle_coordinates
+    check_text_versions
     map_coordinates
     {
         section "Tasty for Android"
