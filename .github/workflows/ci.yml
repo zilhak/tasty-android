@@ -114,13 +114,13 @@ jobs:
       - name: Check formatting
         run: ./gradlew spotlessCheck
 
-      - name: Android Lint
+      - name: Android Lint (first Rust build, cargoNdkBuild and uniffiBindgen)
         run: ./gradlew lint
 
-      - name: Unit tests
+      - name: Unit tests (Rust outputs expected up to date)
         run: ./gradlew test
 
-      - name: Build debug APK
+      - name: Build debug APK (Rust outputs expected up to date)
         run: ./gradlew assembleDebug
 
       - name: Upload reports
