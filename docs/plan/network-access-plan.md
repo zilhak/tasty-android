@@ -204,17 +204,29 @@
   - 공식 플러그인의 다른 기능(Image의 그리기 캔버스, HTML Viewer의 URL 열기·원격 HTTP 제공 등)은 U7의 범위가 아니다. Explorer에서 고른 원격 파일을 보는 것만 한다.
 - 크기 상한: 두 값을 나눈다. (1) 확인 기준: 넘으면 받기 전에 크기를 보이고 확인을 받는다. (2) 강제 상한: 확인을 받아도 넘지 않는 수신·디코드 상한이다. 넘으면 열지 않는다. 대상마다 따로 둔다: Markdown·HTML·SVG 본문(문서 하나), 하위 리소스 총량(문서 하나가 받는 하위 리소스의 바이트 합과 개수. 넘으면 그 뒤 리소스는 비운다), 이미지 파일 수신, 이미지 디코드 크기(가로×세로 픽셀. 작은 파일이 큰 비트맵이 되는 경우를 막는다). 받기 전 크기는 `stat`으로 보고, 받는 중에도 센다. 데스크톱 Markdown Viewer도 큰 파일 확인 팝업 `large-file-confirm`을 둔다(같은 매니페스트). 값은 ④에서 정한다.
 - 이미지: 보기만 한다. SFTP 범위 읽기(#4)로 받고, 위 크기 상한을 따른다. 디코드는 Android 플랫폼 디코더로 한다. 표의 형식 가운데 플랫폼 디코더가 열지 못하는 것(TIFF 등. 지원 목록은 작업 시점 Android 문서 "Supported media formats"로 확인한다)은 아래 판단 필요 항목이다.
-- Markdown·HTML·SVG는 WebView로 그리고, 원격 파일 내용은 믿지 않는 입력으로 다룬다. 정책은 기본 차단이다. 앱이 허용한 것 말고는 모두 막고, 콜백 하나에 차단을 맡기지 않고 설정·헤더·콜백으로 겹쳐 막는다. 아래 Android WebView 동작(각 콜백과 설정이 어느 요청에 적용되는지, 막은 요청이 어떻게 끝나는지)은 대상 WebView 판에서 확인 필요다.
-  - 네트워크: 문서와 하위 리소스는 앱이 가로채 만든 가상 응답(`WebViewClient.shouldInterceptRequest`)만 받는다. 가상 출처 밖의 요청(http·https 원격 주소, 다른 scheme)에는 응답을 만들지 않고 막는다. 이중 방어로 `WebSettings.setBlockNetworkLoads(true)`를 켜 네트워크로 나가는 적재를 막는다. WebSocket 연결은 `shouldInterceptRequest`를 거치지 않으므로 아래 CSP의 `connect-src 'none'`과 네트워크 적재 차단이 막는다. 데스크톱 두 WebView 플러그인도 원격 콘텐츠 기본값이 꺼짐이다(`allow_remote_content = false`, 같은 두 매니페스트).
-  - 문서별 출처 격리: 문서마다 다른 가상 출처(문서 세대를 넣은 호스트 이름)로 싣고, 쿠키·캐시·Web Storage 같은 WebView 저장소에 기대지 않는다. 앞 문서의 응답이 뒤 문서에 쓰이지 않는다. 데스크톱 Windows도 view마다 다른 예약 호스트를 쓰고 예약 주소 밖 탐색과 새 창을 취소한다(`tasty:docs/design/systems/webview.md@72c036b` 87~91행).
-  - CSP: 가로챈 모든 응답에 `Content-Security-Policy`를 붙인다. `default-src`는 그 문서의 가상 출처, `script-src`는 Markdown (a)일 때 번들 스크립트의 hash·nonce만이고 HTML·SVG는 `'none'`, `connect-src 'none'`, `frame-src 'none'`, `form-action 'none'`, `object-src 'none'`, `worker-src 'none'`, `base-uri 'none'`이다. 함께 `Cache-Control: no-store`와 `X-Content-Type-Options: nosniff`를 붙인다. 데스크톱의 원격 파일 entry 응답도 CSP·`no-store`·`nosniff`를 붙이고 entry 전용 CSP가 외부 script·HTTP(S)·fetch·frame·worker를 막는다(같은 문서 68행).
-  - 탐색·창·다운로드: 첫 적재 뒤의 탐색(링크, 리디렉션, 프레임 안 탐색, 폼 제출, 이력 이동)을 `shouldOverrideUrlLoading`에서 모두 거절한다. 새 창(`setSupportMultipleWindows(false)`, `setJavaScriptCanOpenWindowsAutomatically(false)`)과 다운로드(`DownloadListener`가 받지 않는다)를 막는다. 권한 요청(`WebChromeClient.onPermissionRequest`, 위치)도 거절한다. 링크를 눌렀을 때의 동작은 아래 판단 필요 항목이다.
-  - 로컬 스킴: `setAllowFileAccess(false)`, `setAllowContentAccess(false)`. file·content scheme 요청은 가상 응답에서도 거절한다. 앱 로컬 파일과 다른 앱의 content provider를 읽지 못하게 한다.
-  - 네이티브 브리지 없음: `addJavascriptInterface`와 `WebMessage` 포트를 쓰지 않는다. Service Worker는 쓰지 않는다. 등록은 CSP `worker-src 'none'`으로 막고, `ServiceWorkerController`의 요청 가로채기에도 같은 차단을 건다.
-  - 상대 리소스: 문서별로 승인한 원격 경로 범위(아래 판단 필요 항목이 정한다. 추천은 문서 폴더와 그 아래) 안에서만 읽는다. 요청 경로를 그 문서의 가상 출처 기준으로 풀고, 백분율 인코딩을 풀어 정규화한다(`.`·`..`·겹친 구분자를 정리하고, 역슬래시·인코딩된 구분자·NUL은 거절한다. 절대 경로와 `//host` 꼴은 범위 밖으로 본다). 정규화한 경로가 범위 안이고, 문서를 연 같은 SFTP 세션의 `realpath`로 링크까지 푼 경로도 범위 안일 때만 그 세션의 범위 읽기로 읽는다. 문서의 `<base>`는 CSP `base-uri 'none'`으로 쓰지 않는다. 유형은 이미지(5.3 표의 이미지 형식과 SVG)·CSS·글꼴만 응답하고, MIME은 서버나 내용 추측이 아니라 앱이 확장자로 정한다. HTML·스크립트 같은 문서 형식 요청에는 응답하지 않아, 하위 리소스가 문서·프레임·스크립트 권한을 얻지 않는다. 읽기 실패와 범위 밖 요청은 그 리소스만 비운다. 크기 상한은 아래 "크기 상한"을 따른다.
-  - 자바스크립트: HTML·SVG 문서는 끈다(`setJavaScriptEnabled(false)`). 데스크톱 HTML Viewer도 스크립트 격리 기본값이 켜짐이고(`sandbox_scripts = true`), 문서마다 스크립트와 원격 콘텐츠를 판정해 차단 안내와 허용 버튼을 보이는 게이트(`script_gate = true`)를 둔다(같은 매니페스트, tasty `docs/dev-guide/plugin-development.md`@72c036b의 `script_gate` 항목). 앱이 그 허용 버튼을 둘지는 아래 판단 필요 항목이다.
-  - Markdown의 스크립트: 데스크톱 Markdown Viewer는 원문을 ammonia로 정화한 HTML에 플러그인이 번들한 스크립트(highlight.js, KaTeX, mermaid, 주소창·찾기 스크립트)를 넣어 그리므로, 그 kind의 기본값은 스크립트 켜짐이다(`[surface_kinds.webview_defaults] sandbox_scripts = false`, `tasty-official-plugins:crates/tasty-plugin-markdown/tasty-plugin.toml`·`src/render.rs`@4c80e96). 그래서 "자바스크립트 끔"을 Markdown에 그대로 적용하면 코드 강조·수식·다이어그램을 데스크톱과 같게 그릴 수 없다. 아래 판단 필요 항목이다. (a)를 고르면 번들 라이브러리에 안전 설정을 준다(mermaid `securityLevel: "strict"`, KaTeX `trust: false`). 이 값들의 이름과 뜻은 번들하는 판의 문서로 다시 확인한다.
-
+- Markdown·HTML·SVG는 WebView로 그리고, 원격 파일 내용은 믿지 않는 입력으로 다룬다. 정책은 기본 차단이다. 이 계획은 Android WebView API가 무엇을 보장하는지 단정하지 않는다. 아래에 무엇이 막혀야 하는지(수용 조건)를 적고, 각 조건을 채우는 수단(가로채기 콜백, `setBlockNetworkLoads`, CSP, WebView 설정)은 후보로 적는다. 수단이 조건을 채우는지는 확인 필요이고, 대상 WebView에서 ④ 전에 시험한다. 한 수단에 기대지 않고 겹쳐 막는다.
+  - 수용 조건:
+    1. 가상 출처 밖으로 나가는 네트워크 요청이 0이다(http·https 원격 주소, 다른 scheme).
+    2. WebSocket·Service Worker·DNS prefetch·hyperlink auditing·WebRTC로 나가는 연결이 0이다.
+    3. 최상위 탐색은 앱이 발급한 초기 탐색 하나만 받는다. 링크, 리디렉션, 폼 제출(POST 포함), 이력 이동, 프레임 안 탐색은 받지 않는다.
+    4. 새 창과 다운로드가 0이다. 권한 요청(위치 등)은 허용하지 않는다.
+    5. 하위 리소스는 허용한 유형(이미지·CSS·글꼴)과 앱이 정한 MIME으로만 응답받고, 문서(최상위·프레임)로 열리지 않는다. SVG는 하위 이미지로 받을 때와 최상위 문서로 열 때를 나눠, 하위 리소스로 받은 SVG가 문서가 되지 않는다.
+    6. file·content 같은 로컬 스킴 적재가 0이다.
+    7. 문서별 출처 격리: 문서마다 다른 가상 출처(문서 세대를 넣은 호스트 이름)로 싣고, 앞 문서의 응답과 WebView 저장소(쿠키·캐시·Web Storage)가 뒤 문서에 쓰이지 않는다.
+    8. 네이티브 JS 브리지가 0이다. `addJavascriptInterface`와 `WebMessage` 포트를 쓰지 않는다(앱 코드의 선택이다).
+  - 거절 방식: 가로채기 콜백(`WebViewClient.shouldInterceptRequest`, Service Worker 쪽은 `ServiceWorkerController`의 같은 콜백)이 받는 비허용 요청에는 앱이 만든 실패 응답(오류 상태, 빈 본문)을 돌려준다. `null`을 돌려주면 WebView가 그 요청을 직접 적재하므로 쓰지 않는다. 범위 밖 리소스와 읽기에 실패한 리소스도 같은 실패 응답으로 비운다.
+  - 수단 후보와 확인할 것(모두 확인 필요):
+    - 조건 1·6: 가로채기의 실패 응답, `WebSettings.setBlockNetworkLoads(true)`, `setAllowFileAccess(false)`·`setAllowContentAccess(false)`.
+    - 조건 2: CSP `connect-src 'none'`·`worker-src 'none'`과 네트워크 적재 차단. WebSocket과 Service Worker 요청이 가로채기 콜백을 거치는지, DNS prefetch·hyperlink auditing·WebRTC를 끄는 설정이 있는지, 위 설정이 그 연결을 막는지를 시험한다.
+    - 조건 3: `shouldOverrideUrlLoading`의 거절, CSP `form-action 'none'`·`frame-src 'none'`, 가로채기가 초기 탐색 밖의 문서 요청에 실패 응답을 주는 것. 이 콜백이 POST·이력 이동·프레임 탐색에서 불리는지는 시험으로 본다.
+    - 조건 4: `setSupportMultipleWindows(false)`, `setJavaScriptCanOpenWindowsAutomatically(false)`, `DownloadListener`, `WebChromeClient.onPermissionRequest`의 거절. 리스너를 두지 않는 것만으로 다운로드가 막히는지는 시험으로 본다.
+    - 조건 5: 가로채기 콜백에서 요청 종류(초기 탐색, 프레임 탐색, 하위 리소스)와 정규화 전 URL을 판별할 수 있는지, 가상 응답에 붙인 CSP와 `X-Content-Type-Options: nosniff`가 적용되는지를 시험한다.
+  - CSP 후보: 가로챈 모든 응답에 `Content-Security-Policy`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`를 붙인다. CSP는 `default-src` 그 문서의 가상 출처, `script-src` Markdown (a)일 때 번들 스크립트의 hash·nonce만이고 HTML·SVG는 `'none'`, `connect-src 'none'`, `frame-src 'none'`, `form-action 'none'`, `object-src 'none'`, `worker-src 'none'`, `base-uri 'none'`이다. `style-src`와 `font-src`는 아래 "CSP와 렌더링"에서 ④에 정한다.
+  - 데스크톱 선례(Android 동작의 증거로 쓰지 않는다): 원격 파일 entry 응답은 CSP·`no-store`·`nosniff`를 붙이고, entry 전용 CSP가 외부 script·CSS·HTTP(S)·fetch·frame·worker를 막으며, DNS prefetch·hyperlink auditing·WebRTC·media stream과 file URL 접근을 끈다(`tasty:docs/design/systems/webview.md@72c036b` 68행). 같은 문서 87~91행의 view마다 다른 예약 호스트와 "허용한 두 탐색 밖의 예약 주소 탐색과 예약 주소 새 창" 취소는 Windows에서 큰 HTML 본문을 host 전용 주소로 싣는 경로에 한한 규칙이다.
+  - 상대 리소스: 문서별로 승인한 원격 경로 범위(아래 판단 필요 항목이 정한다. 추천은 문서 폴더와 그 아래) 안에서만 읽는다. 요청 경로를 그 문서의 가상 출처 기준으로 풀고, 백분율 인코딩을 풀어 정규화한다(`.`·`..`·겹친 구분자를 정리하고, 역슬래시·인코딩된 구분자·NUL은 거절한다. 절대 경로와 `//host` 꼴은 범위 밖으로 본다). 범위의 뿌리(문서 폴더)도 같은 SFTP 세션의 `realpath`로 풀고, 요청 경로를 `realpath`로 푼 결과와 경로 구성 요소 단위로 비교한다(문자열 앞부분 비교를 쓰지 않는다). 정규화한 경로와 링크를 푼 경로가 모두 범위 안일 때만 그 세션의 범위 읽기로 읽는다. `realpath`와 읽기는 다른 연산이라, 그 사이에 원격 경로의 링크가 바뀌면 범위 밖 파일을 읽을 틈이 남는다. 이 틈은 한계로 적는다. 검사한 대상을 그대로 여는 방법(예: 연 핸들의 실제 경로 조회)을 #4의 수용 조건으로 요구할지, 범위를 보장할 수 없는 요청을 거절할지는 ④ 전에 정한다. 문서의 `<base>`는 CSP `base-uri 'none'`으로 쓰지 않는다. 유형은 이미지(5.3 표의 이미지 형식과 SVG)·CSS·글꼴만 응답하고, MIME은 서버나 내용 추측이 아니라 앱이 확장자로 정한다. 문서 형식(HTML·스크립트 등) 요청에는 실패 응답을 준다. 크기 상한은 위 "크기 상한"을 따른다.
+  - 자바스크립트: HTML·SVG 문서는 끈다(`setJavaScriptEnabled(false)`, CSP `script-src 'none'`). 데스크톱 HTML Viewer도 스크립트 격리 기본값이 켜짐이고(`sandbox_scripts = true`), 문서마다 스크립트와 원격 콘텐츠를 판정해 차단 안내와 허용 버튼을 보이는 게이트(`script_gate = true`)를 둔다(같은 매니페스트, tasty `docs/dev-guide/plugin-development.md`@72c036b의 `script_gate` 항목). 첫 판의 기본은 이 차단이다. 허용 버튼을 두기로 하면 위 JS 끔과 `script-src 'none'`으로는 켤 수 없으므로, 그때 켜는 범위(그 문서 하나)와 그 문서의 CSP·네트워크·상대 리소스 정책을 따로 정한다(아래 판단 필요 항목).
+  - Markdown의 스크립트: 데스크톱 Markdown Viewer는 원문을 ammonia로 정화한 HTML에 플러그인이 번들한 스크립트(highlight.js, KaTeX, mermaid, 주소창·찾기 스크립트)를 넣어 그리므로, 그 kind의 기본값은 스크립트 켜짐이다(`[surface_kinds.webview_defaults] sandbox_scripts = false`, `tasty-official-plugins:crates/tasty-plugin-markdown/tasty-plugin.toml`·`src/render.rs`@4c80e96). 그래서 "자바스크립트 끔"을 Markdown에 그대로 적용하면 코드 강조·수식·다이어그램을 그릴 수 없다. 아래 판단 필요 항목이다. (a)를 고르면 번들 라이브러리에 안전 설정을 준다(mermaid `securityLevel: "strict"`, KaTeX `trust: false`). 이 값들의 이름과 뜻은 번들하는 판의 문서로 다시 확인한다.
+  - CSP와 렌더링: Markdown (a)는 데스크톱과 같은 출력을 약속하지 않는다. 데스크톱 문서는 인라인 `<style>`을 쓰고(`render.rs`@4c80e96 251~265행), KaTeX 글꼴을 `data:` URI로 CSS에 넣으며(1952~1966행), 수식 스크립트와 함께 인라인 `<style>`을 넣는다(1979~1989행). 위 CSP 후보의 `default-src`만으로는 이것들이 막힌다. 앱이 신뢰하는 스타일과 글꼴을 가상 출처의 응답으로 줄지, 그 스타일만 hash로 허용하는 `style-src`·`font-src`를 줄지는 ④에서 정하고, 결과는 대상 WebView에서 확인 필요다. HTML 문서의 인라인 `style`도 같은 `style-src` 결정에 따른다.
 
 쓰기와 파일 관리(U8, 8절 ④′) 제안:
 
@@ -236,8 +248,8 @@
 
 판단 필요(모두 ④ 전에 정한다. 항목마다 판단 주체를 적는다):
 
-- Markdown 렌더링 방식(구현 판단. 사용자 답은 파일 형식을 정했고 데스크톱 렌더링과 같은 결과를 요구하지 않았다): (a) 앱이 원문을 정화한 HTML로 만들고 앱이 번들한 스크립트만 실행한다(원문 안 스크립트는 정화로 지우고, 번들 스크립트의 결함은 CSP·네트워크 차단으로 가둔다. 번들 라이브러리는 원격 원문을 입력으로 받으므로 그 주입 결함이 원격 문서에 스크립트를 줄 수 있다는 전제로 위 차단을 둔다), (b) 자바스크립트를 끄고 코드 강조·수식·다이어그램 없이 그린다, (c) WebView 없이 앱이 직접 그린다. 추천은 (a)다. 위의 차단 경계를 전제로 데스크톱과 같은 결과를 얻는다. (a)를 고르면 번들한 스크립트의 고지가 7절 고지 파일에 들어간다.
-- HTML 문서의 스크립트 허용 버튼(제품·보안 판단, 사용자 몫): 데스크톱처럼 문서마다 허용 버튼을 둘지, 첫 판은 늘 끈 채로 둘지. 추천은 첫 판은 늘 끔이다. 스크립트를 켜면 가상 출처 안의 요청으로 같은 SFTP 자격이 읽을 수 있는 다른 파일을 스크립트가 고를 수 있게 되므로, 버튼을 두는 안은 아래 상대 리소스 범위와 함께 정해야 한다.
+- Markdown 렌더링 방식(구현 판단. 사용자 답은 파일 형식을 정했고 데스크톱 렌더링과 같은 결과를 요구하지 않았다): (a) 앱이 원문을 정화한 HTML로 만들고 앱이 번들한 스크립트만 실행한다(원문 안 스크립트는 정화로 지우고, 번들 스크립트의 결함은 CSP·네트워크 차단으로 가둔다. 번들 라이브러리는 원격 원문을 입력으로 받으므로 그 주입 결함이 원격 문서에 스크립트를 줄 수 있다는 전제로 위 차단을 둔다), (b) 자바스크립트를 끄고 코드 강조·수식·다이어그램 없이 그린다, (c) WebView 없이 앱이 직접 그린다. 추천은 (a)다. 위 차단 경계 안에서 코드 강조·수식·다이어그램을 그리는 것이 목표이고, 데스크톱과 같은 출력은 약속하지 않는다(위 "CSP와 렌더링"). (a)를 고르면 번들한 스크립트의 고지가 7절 고지 파일에 들어간다.
+- HTML 문서의 스크립트 허용 버튼(제품·보안 판단, 사용자 몫): 데스크톱처럼 문서마다 허용 버튼을 둘지, 첫 판은 늘 끈 채로 둘지. 추천은 첫 판은 늘 끔이다(JS 끔, `script-src 'none'`). 버튼을 고르면 켜는 범위와 그 문서의 CSP·네트워크·상대 리소스 정책을 따로 정한다. 스크립트를 켜면 가상 출처 안의 요청으로 같은 SFTP 자격이 읽을 수 있는 다른 파일을 스크립트가 고를 수 있게 되므로, 버튼을 두는 안은 아래 상대 리소스 범위와 함께 정해야 한다.
 - 플랫폼 디코더가 열지 못하는 이미지 형식(TIFF 등): 디코더를 무엇으로 할지(앱에 디코더를 더함, 형식마다 고름)는 구현 판단이다. 그 형식을 지원하지 않고 "이 기기에서 볼 수 없음"으로 두는 것은 U7(공식 목록 전체)을 바꾸므로 사용자 몫이다. 공식 Image 플러그인은 TIFF·ICO 디코더를 포함한다(`image` 크레이트 feature `png`·`jpeg`·`gif`·`bmp`·`webp`·`ico`·`tiff`, `tasty-official-plugins:crates/tasty-plugin-image/Cargo.toml@4c80e96` 22행). Android API 29 이상의 플랫폼 디코더가 어떤 형식과 변형을 실제로 여는지는 확인 필요다. 추천은 플랫폼 디코더가 못 여는 형식만 앱 디코더로 채우는 것이다.
 - 덮어쓰는 이름 바꾸기가 없는 서버의 저장(제품·안전 판단, 사용자 몫): (가) 저장 불가로 둔다, (나) 확인 뒤 복구 가능한 대체만 둔다. (나)는 원래 파일을 먼저 백업 이름으로 바꾸고(덮어쓰지 않는 이름 바꾸기), 임시 파일을 원래 이름으로 바꾼 뒤 백업을 지운다. 도중에 실패해도 원래 내용은 백업 이름에 남지만, 원래 이름에 파일이 없는 순간은 남는다. 원래 파일을 먼저 지우는 대체는 어느 쪽에서도 쓰지 않는다. 추천은 첫 판 (가)다.
 - 상대 리소스를 어디까지 읽을지(제품·보안 판단, 사용자 몫): 문서 폴더 아래만, 같은 저장소 안까지, 같은 SFTP 자격이 읽는 어디든 중에서 고른다. 추천은 문서 폴더와 그 아래만이다(문서 밖 파일을 문서가 고르지 못하게 한다).
@@ -351,7 +363,8 @@
 | 만들기·옮기기 대상이 이미 있다 | 5.3 | #5f "이미 있음". 덮어쓰지 않는다 |
 | 폴더가 비어 있지 않다·공간이 없다 | 5.3 | #5f "폴더가 비어 있지 않음"·"공간 없음"(서버가 알려 줄 때) |
 | 재귀 지우기가 도중에 멈췄다 | 5.3 | 실패한 항목의 #5f 사유와 남은 항목 목록 |
-| 문서가 막힌 리소스를 쓴다 | 5.3 | WebView 요청 가로채기에서 막은 원격 주소·다른 scheme, 또는 읽지 못한 상대 경로 리소스. 문서는 그대로 보이고 막힌 사실을 알린다 |
+| 문서가 막힌 리소스를 썼다(앱이 관측) | 5.3 | 가로채기 콜백이 실패 응답을 준 요청(원격 주소, 다른 scheme, 범위 밖, 허용하지 않은 유형, 읽기 실패). 문서는 그대로 보이고 막힌 사실을 알린다 |
+| 문서가 쓴 리소스가 막혔을 수 있다(사유를 받지 못함) | 5.3 | CSP·WebView 설정이 막아 앱 콜백에 오지 않은 요청. 앱은 그 사유를 받지 못할 수 있으므로 막힌 개수를 알리지 않고, 앱이 관측한 거절만 보인다. 이 경우를 앱이 알 수단이 있는지는 확인 필요 |
 | 원격 Tasty가 없거나 실행 중이 아니다 | 5.4 | 포트 발견 실패(원격 인스턴스 없음·종료), 원격 리스너 없음 |
 | 원격 Tasty가 전환 전 판이다 | 5.4 | `PeerTooOld { evidence: PortOnlyDiscovery }` 또는 v1 거절 ACK(`evidence: V1Ack`) |
 | 원격 Tasty가 요청 채널을 광고하지 않는다 | 5.4 | handshake `caps`에 `net.request` 없음(구버전 판정과 별개) |
