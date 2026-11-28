@@ -84,6 +84,24 @@ class DeviceIdentityTest {
         }
     }
 
+    @Test
+    fun forAppKeepsTheKeyUnderTheNoBackupFolder() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val appKeyDir = File(context.noBackupFilesDir, "net")
+        // Only remove the folder afterwards when this test made it; a key that was already there stays.
+        val existed = appKeyDir.exists()
+        try {
+            val first = DeviceIdentity.forApp(context).deviceId()
+            val second = DeviceIdentity.forApp(context).deviceId()
+            Log.i(TAG, "forApp: dir=$appKeyDir existed=$existed first=$first second=$second")
+            assertTrue(File(appKeyDir, "device_key").isFile)
+            assertTrue(first, DEVICE_ID.matches(first))
+            assertEquals(first, second)
+        } finally {
+            if (!existed) appKeyDir.deleteRecursively()
+        }
+    }
+
     private companion object {
         const val TAG = "DeviceIdentityTest"
         val DEVICE_ID = Regex("[0-9a-f]{64}")
