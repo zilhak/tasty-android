@@ -1649,7 +1649,7 @@ dependencies = [
 [[package]]
 name = "tasty-net-identity"
 version = "0.1.0"
-source = "git+https://github.com/zilhak/tasty-network?rev=e656c21a18b3fcd75d3aadbf0817515b75dbb0ed#e656c21a18b3fcd75d3aadbf0817515b75dbb0ed"
+source = "git+https://github.com/zilhak/tasty-network?rev=36cd2a29adeb33e0b8383767db74ec233c07535c#36cd2a29adeb33e0b8383767db74ec233c07535c"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.4.3",
