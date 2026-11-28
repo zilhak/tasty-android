@@ -22,7 +22,7 @@ pub enum RemoteErrorKind {
         message: Option<String>,
     },
     /// Not a JSON object, or a code other than `METHOD_NOT_FOUND` with a `message` that is
-    /// not a string.
+    /// neither a string nor null (a null message is `Other` with no message).
     Malformed,
 }
 
