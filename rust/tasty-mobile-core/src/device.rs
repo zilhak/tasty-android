@@ -50,18 +50,18 @@ impl std::fmt::Display for DeviceKeyError {
 
 impl std::error::Error for DeviceKeyError {}
 
-impl From<IdentityError> for DeviceKeyError {
-    fn from(error: IdentityError) -> Self {
-        let reason = error.to_string();
-        match error {
-            IdentityError::Io { .. } => Self::Io { reason },
-            IdentityError::Corrupt { .. } => Self::Corrupt { reason },
-            IdentityError::UnsafeFile { .. } => Self::UnsafeFile { reason },
-            IdentityError::Protect { .. } => Self::Protect { reason },
-            IdentityError::Random(_) => Self::Random { reason },
-            IdentityError::Leftover { .. } => Self::Leftover { reason },
-            _ => Self::Other { reason },
-        }
+/// The app error for a tasty-network error. Kept private so the public API names no
+/// tasty-network type.
+fn device_key_error(error: IdentityError) -> DeviceKeyError {
+    let reason = error.to_string();
+    match error {
+        IdentityError::Io { .. } => DeviceKeyError::Io { reason },
+        IdentityError::Corrupt { .. } => DeviceKeyError::Corrupt { reason },
+        IdentityError::UnsafeFile { .. } => DeviceKeyError::UnsafeFile { reason },
+        IdentityError::Protect { .. } => DeviceKeyError::Protect { reason },
+        IdentityError::Random(_) => DeviceKeyError::Random { reason },
+        IdentityError::Leftover { .. } => DeviceKeyError::Leftover { reason },
+        _ => DeviceKeyError::Other { reason },
     }
 }
 
@@ -72,7 +72,7 @@ impl From<IdentityError> for DeviceKeyError {
 /// This does file I/O and must not be called on the UI thread.
 #[uniffi::export]
 pub fn load_or_create_device_key(key_dir: String) -> Result<DeviceKeyInfo, DeviceKeyError> {
-    let key = DeviceKey::load_or_create(Path::new(&key_dir))?;
+    let key = DeviceKey::load_or_create(Path::new(&key_dir)).map_err(device_key_error)?;
     Ok(DeviceKeyInfo {
         device_id: key.id().to_string(),
     })
