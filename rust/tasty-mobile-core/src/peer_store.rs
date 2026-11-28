@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-use tasty_net_identity::{DeviceId, PeerKeyStore, PeerRef, PinOutcome, StoreError};
+use tasty_net_identity::{DeviceId, PeerKeyStore, PeerRef, PinOutcome, StoreError, reregister};
 
 /// The longest peer name, in bytes.
 const MAX_PEER_LEN: usize = 64;
@@ -164,6 +164,128 @@ impl From<PeerFileError> for StoreError {
     fn from(error: PeerFileError) -> Self {
         StoreError::new(error)
     }
+}
+
+// Temporary bridge: when tasty-network ships its own UniFFI crate, the exports below move to
+// the ffi step of the network plan. Only app records cross the boundary, never tasty-network
+// types.
+
+/// The result of [`peer_key_pin_if_absent`].
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PeerPin {
+    /// Whether this call recorded the given ID. Of several first calls for one peer only one
+    /// gets `true`.
+    pub inserted: bool,
+    /// The recorded device ID as 64 lowercase hex digits: the given one when `inserted`,
+    /// otherwise the one that was already there (it may differ from the given one).
+    pub device_id: String,
+}
+
+/// Why a peer record could not be read or written. Branch on the variant; `reason` is a
+/// message for logs.
+#[derive(Debug, PartialEq, Eq, uniffi::Error)]
+pub enum PeerKeyError {
+    /// The peer name is not 1 to 64 of `A-Z`, `a-z`, `0-9`, `_` and `-`.
+    InvalidPeer { reason: String },
+    /// The given device ID is not 64 lowercase hex digits of a valid public key.
+    InvalidDeviceId { reason: String },
+    /// The record file does not have the expected format. It is left as it is.
+    Corrupt { reason: String },
+    /// A file system call failed.
+    Io { reason: String },
+    /// Records cannot be written here: the rename that refuses to replace is not offered.
+    Unsupported { reason: String },
+}
+
+impl fmt::Display for PeerKeyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidPeer { reason }
+            | Self::InvalidDeviceId { reason }
+            | Self::Corrupt { reason }
+            | Self::Io { reason }
+            | Self::Unsupported { reason } => f.write_str(reason),
+        }
+    }
+}
+
+impl Error for PeerKeyError {}
+
+/// The app error for a store error. Kept private so the public API names no tasty-network
+/// type.
+fn peer_key_error(error: StoreError) -> PeerKeyError {
+    match error.into_inner().downcast::<PeerFileError>() {
+        Ok(error) => {
+            let reason = error.to_string();
+            match *error {
+                PeerFileError::InvalidPeer { .. } => PeerKeyError::InvalidPeer { reason },
+                PeerFileError::Corrupt { .. } => PeerKeyError::Corrupt { reason },
+                PeerFileError::Io { .. } => PeerKeyError::Io { reason },
+                PeerFileError::Unsupported { .. } => PeerKeyError::Unsupported { reason },
+            }
+        }
+        // The file store raises only its own errors.
+        Err(other) => PeerKeyError::Io {
+            reason: other.to_string(),
+        },
+    }
+}
+
+fn parse_device_id(hex: &str) -> Result<DeviceId, PeerKeyError> {
+    hex.parse().map_err(|e| PeerKeyError::InvalidDeviceId {
+        reason: format!("device ID {hex:?}: {e}"),
+    })
+}
+
+/// The recorded device ID of `peer` in the store folder `dir`, or `None` when it has no record.
+///
+/// This does file I/O and must not be called on the UI thread.
+#[uniffi::export]
+pub fn peer_key_get(dir: String, peer: String) -> Result<Option<String>, PeerKeyError> {
+    let id = FilePeerKeyStore::new(dir)
+        .get(&PeerRef::new(peer))
+        .map_err(peer_key_error)?;
+    Ok(id.map(|id| id.to_string()))
+}
+
+/// Records `device_id` for `peer` in the store folder `dir` when the peer has no record, and
+/// otherwise returns the record unchanged. The folder is created when missing.
+///
+/// This does file I/O and must not be called on the UI thread.
+#[uniffi::export]
+pub fn peer_key_pin_if_absent(
+    dir: String,
+    peer: String,
+    device_id: String,
+) -> Result<PeerPin, PeerKeyError> {
+    let id = parse_device_id(&device_id)?;
+    let outcome = FilePeerKeyStore::new(dir)
+        .pin_if_absent(&PeerRef::new(peer), &id)
+        .map_err(peer_key_error)?;
+    Ok(match outcome {
+        PinOutcome::Inserted => PeerPin {
+            inserted: true,
+            device_id: id.to_string(),
+        },
+        PinOutcome::Existing(existing) => PeerPin {
+            inserted: false,
+            device_id: existing.to_string(),
+        },
+    })
+}
+
+/// The user's explicit re-registration: records `device_id` for `peer` in the store folder
+/// `dir`, replacing any record. Only a user action may call this, never a connection.
+///
+/// This does file I/O and must not be called on the UI thread.
+#[uniffi::export]
+pub fn peer_key_reregister(
+    dir: String,
+    peer: String,
+    device_id: String,
+) -> Result<(), PeerKeyError> {
+    let id = parse_device_id(&device_id)?;
+    reregister(&FilePeerKeyStore::new(dir), &PeerRef::new(peer), &id).map_err(peer_key_error)
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -359,7 +481,7 @@ mod tests {
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use tasty_net_identity::{DeviceKey, check_peer, reregister};
+    use tasty_net_identity::{DeviceKey, check_peer};
 
     use super::*;
 
@@ -689,6 +811,80 @@ mod tests {
         );
         assert_eq!(dir.store().get(&peer("p1")).expect("get"), Some(winner));
         assert_eq!(entries(&dir), vec!["p1.id".to_owned()]);
+    }
+
+    #[test]
+    fn the_exports_report_their_errors() {
+        let dir = TempDir::new("exports");
+        let store_dir = dir.store_dir().to_string_lossy().into_owned();
+        let valid = id(1).to_string();
+        for bad in ["", "zz", valid.to_uppercase().as_str(), &valid[..63]] {
+            let error =
+                peer_key_pin_if_absent(store_dir.clone(), "p1".into(), bad.into()).expect_err(bad);
+            assert!(
+                matches!(error, PeerKeyError::InvalidDeviceId { .. }),
+                "{bad:?}: {error}"
+            );
+            let error =
+                peer_key_reregister(store_dir.clone(), "p1".into(), bad.into()).expect_err(bad);
+            assert!(
+                matches!(error, PeerKeyError::InvalidDeviceId { .. }),
+                "{bad:?}: {error}"
+            );
+        }
+        let error = peer_key_get(store_dir.clone(), "a/b".into()).expect_err("peer");
+        assert!(matches!(error, PeerKeyError::InvalidPeer { .. }), "{error}");
+        let error = peer_key_pin_if_absent(store_dir.clone(), "a.b".into(), valid.clone())
+            .expect_err("peer");
+        assert!(matches!(error, PeerKeyError::InvalidPeer { .. }), "{error}");
+        assert_eq!(
+            peer_key_get(store_dir.clone(), "p1".into()).expect("get"),
+            None
+        );
+        write_raw(&dir, "p2", b"broken\n");
+        let error = peer_key_get(store_dir, "p2".into()).expect_err("corrupt");
+        assert!(matches!(error, PeerKeyError::Corrupt { .. }), "{error}");
+        assert!(!dir.store_dir().join("p1.id").exists());
+    }
+
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "android")),
+        ignore = "writes records with renameat2, Linux and Android only"
+    )]
+    #[test]
+    fn the_exports_pin_and_reregister() {
+        let dir = TempDir::new("exports-write");
+        let store_dir = dir.store_dir().to_string_lossy().into_owned();
+        let (first, second) = (id(1).to_string(), id(2).to_string());
+        let pin = |hex: &str| {
+            peer_key_pin_if_absent(store_dir.clone(), "p1".into(), hex.into()).expect("pin")
+        };
+        assert_eq!(
+            pin(&first),
+            PeerPin {
+                inserted: true,
+                device_id: first.clone()
+            }
+        );
+        assert_eq!(
+            pin(&second),
+            PeerPin {
+                inserted: false,
+                device_id: first.clone()
+            }
+        );
+        peer_key_reregister(store_dir.clone(), "p1".into(), second.clone()).expect("reregister");
+        assert_eq!(
+            peer_key_get(store_dir.clone(), "p1".into()).expect("get"),
+            Some(second.clone())
+        );
+        assert_eq!(
+            pin(&first),
+            PeerPin {
+                inserted: false,
+                device_id: second
+            }
+        );
     }
 
     /// The sorted names in the store folder.
