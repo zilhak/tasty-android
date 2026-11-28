@@ -1,5 +1,5 @@
 # cargo deny policy for the licenses, bans and sources checks. Run from rust/:
-#   cargo deny --locked check licenses bans sources
+#   cargo deny --locked --workspace check licenses bans sources
 # Advisories are left out: a new advisory fails commits that changed nothing. Started from the
 # tasty-network deny.toml, with the license list narrowed to what the app's graph uses.
 

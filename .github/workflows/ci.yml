@@ -54,6 +54,18 @@ jobs:
             cargo install cargo-ndk --version "$want" --locked
           fi
 
+      - name: Install cargo-deny 0.20.2 unless the Rust cache restored it
+        working-directory: rust
+        run: |
+          want=0.20.2
+          have=$(cargo deny --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+          if [ "$have" = "$want" ]; then
+            echo "cargo-deny $have restored from the Rust cache; not installing"
+          else
+            echo "cargo-deny ${have:-missing}; installing $want"
+            cargo install cargo-deny --version "$want" --locked
+          fi
+
       - name: Rust format, Clippy and tests
         working-directory: rust
         run: |
@@ -88,6 +100,11 @@ jobs:
           bash "$script" --manifest-path "$PWD/Cargo.toml" --app \
             --target aarch64-linux-android --target x86_64-linux-android \
             -p tasty-mobile-core
+
+      # Policy in rust/deny.toml. Advisories are left out there on purpose.
+      - name: cargo deny (licenses, bans, sources)
+        working-directory: rust
+        run: cargo deny --locked --workspace check licenses bans sources
 
       # Caches Gradle state and checks the wrapper jar checksum.
       - uses: gradle/actions/setup-gradle@v6
