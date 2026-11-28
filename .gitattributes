@@ -6,3 +6,4 @@ gradlew text eol=lf
 *.png binary
 *.webp binary
 LICENSE text eol=lf
+notices/** text eol=lf

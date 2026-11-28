@@ -1,0 +1,7 @@
+The following crates are used under the Mozilla Public License 2.0, unmodified:
+
+@@crates
+
+Their source code is available from crates.io at the versions listed here, and for UniFFI also from
+https://github.com/mozilla/uniffi-rs. The exact versions are recorded in rust/Cargo.lock of
+https://github.com/zilhak/tasty-android at the commit this app was built from.

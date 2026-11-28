@@ -1,0 +1,10 @@
+# Rust crates whose license text cargo-about cannot take from the crate source (rust/about.hbs,
+# @@fallback). scripts/notices.sh fails when a crate falls back and is not listed here, or is listed
+# here and does not fall back. Files are relative to this folder and are printed in order.
+# crate	version	files	source of the crate's own file
+finl_unicode	1.5.1	rust/finl_unicode-1.5.1.LICENSE-UNICODE	https://raw.githubusercontent.com/dahosek/finl_unicode/383f4851cd7438ad96bbb3260cef5573da51ae6c/LICENSE-UNICODE
+serial2	0.2.39	rust/serial2-0.2.39.LICENSE-APACHE Apache-2.0.txt	https://raw.githubusercontent.com/de-vri-es/serial2-rs/ae370aada44d925f32050df91b511f12c033ea6b/LICENSE-APACHE
+siphasher	0.3.11	rust/siphasher-0.3.11.COPYING MIT.txt	https://raw.githubusercontent.com/jedisct1/rust-siphash/55ff379462517d8ec790bd9ce5382d2a1c364ee0/COPYING
+vtparse	0.6.2	rust/wezterm.LICENSE.md	https://raw.githubusercontent.com/wez/wezterm/edeae72b5fc55c7fa4aa1d08bbefd08c5493f757/LICENSE.md
+wezterm-bidi	0.2.3	rust/wezterm-bidi-0.2.3.LICENSE.md	https://raw.githubusercontent.com/wez/wezterm/fdcf1a794baf5703a200dcc06d94da8332059617/bidi/LICENSE.md
+wezterm-input-types	0.1.0	rust/wezterm.LICENSE.md	https://raw.githubusercontent.com/wez/wezterm/d5ca5509b95edc31291ba29bd1fcbf3f0b12c92d/LICENSE.md

@@ -1,0 +1,36 @@
+# License of each Android library in the release runtime classpath, read from its POM. A key is a
+# group or group:module; group:module wins. scripts/notices.sh fails when a library has no key.
+# Libraries with the same files are listed together, in the order of their first row, and the
+# files (relative to this folder) are printed once after them.
+# key	license	holder (from the POM)	files
+androidx.activity	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.annotation	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.arch.core	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.autofill	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.collection	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.animation	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.foundation	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.material	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.material3	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.runtime	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.compose.ui	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.concurrent	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.core	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.customview	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.emoji2	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.graphics	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.interpolator	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.lifecycle	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.navigationevent	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.profileinstaller	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.savedstate	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.startup	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.tracing	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.versionedparcelable	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+androidx.window	Apache-2.0	The Android Open Source Project	Apache-2.0.txt
+com.google.guava:listenablefuture	Apache-2.0	Google	Apache-2.0.txt
+org.jetbrains	Apache-2.0	JetBrains Team	Apache-2.0.txt
+org.jetbrains.kotlin	Apache-2.0	Kotlin Team	Apache-2.0.txt
+org.jetbrains.kotlinx	Apache-2.0	JetBrains Team	Apache-2.0.txt
+org.jspecify	Apache-2.0	Kevin Bourrillion	Apache-2.0.txt
+net.java.dev.jna:jna	Apache-2.0 OR LGPL-2.1-or-later, used under Apache-2.0	Timothy Wall, Matthias Bläsing	jna/LICENSE jna/AL2.0
