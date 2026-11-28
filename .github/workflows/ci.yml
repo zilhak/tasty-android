@@ -16,10 +16,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Measured: 7m45s with a full Rust cache match that still compiled cargo-ndk and cargo-deny
-    # (3m of that), and 8m48s for the slowest run so far. 20 leaves room for a run that
-    # finds no cache.
-    timeout-minutes: 20
+    # Measured: 18m02s for a run that found no Rust cache and installed cargo-ndk, cargo-deny and
+    # cargo-about, and 2m53s for a run whose cache matched. The three tool versions are in the
+    # cache key, so raising one brings one run without a cache.
+    timeout-minutes: 30
     # Pinned cargo tool versions. They are also part of the Rust cache key below, so raising one
     # starts a new cache entry that saves the newly installed binary.
     env:
