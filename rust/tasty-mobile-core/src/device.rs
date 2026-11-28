@@ -22,9 +22,10 @@ pub enum DeviceKeyError {
     Io { reason: String },
     /// The key file does not have the expected format. It is left as it is.
     Corrupt { reason: String },
-    /// The key file or its directory is not private to this app.
+    /// The key file or its directory failed a safety check (a link, the wrong file type or
+    /// permissions that are not private to this app).
     UnsafeFile { reason: String },
-    /// A new key file could not be made private, so nothing was written.
+    /// A new key file could not be made private, so no key bytes were written.
     Protect { reason: String },
     /// The OS random source failed, so no key was made.
     Random { reason: String },
