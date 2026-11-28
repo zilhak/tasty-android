@@ -48,10 +48,12 @@ section() {
 }
 
 # The strings of the TOML array "$3 = [ ... ]" in table [$2] of file $1 ("" for the top level), in
-# order. Fails on what it cannot read: no such array, the key twice in the table, or anything in the
-# array other than double-quoted strings without escapes, commas and comments.
+# order. The key may be bare or quoted. Fails on what it cannot read: no such array, the key twice
+# in the table, or anything in the array other than non-empty double-quoted strings without escapes,
+# commas and comments.
 toml_list() {
-    awk -v table="$2" -v key="$3" '
+    awk -v table="$2" -v key="$3" -v q="'" '
+        BEGIN { keyed = "^[ \t]*(" key "|\"" key "\"|" q key q ")[ \t]*=" }
         function fail(msg) {
             print FILENAME ":" FNR ": " msg > "/dev/stderr"
             bad = 1
@@ -65,11 +67,11 @@ toml_list() {
             next
         }
         !inside {
-            if (current != table || $0 !~ "^[ \t]*" key "[ \t]*=") next
+            if (current != table || $0 !~ keyed) next
             if (found) fail(key " is set twice")
             found = 1
             line = $0
-            sub("^[ \t]*" key "[ \t]*=[ \t]*", "", line)
+            sub(keyed "[ \t]*", "", line)
             if (substr(line, 1, 1) != "[") fail(key " is not an array")
             line = substr(line, 2)
             inside = 1
@@ -103,6 +105,7 @@ toml_list() {
                 if (end == 0) fail("a string without its closing quote in " key)
                 text = substr(line, 1, end - 1)
                 if (text ~ /\\/) fail("an escape in a string of " key)
+                if (text == "") fail("an empty string in " key)
                 print text
                 value = 1
                 line = substr(line, end + 1)
@@ -138,13 +141,14 @@ print_files() {
 }
 
 check_license_lists() {
-    local deny about
-    deny=$(toml_list "$root/rust/deny.toml" licenses allow) || die "cannot read allow in rust/deny.toml"
-    about=$(toml_list "$root/rust/about.toml" "" accepted) || die "cannot read accepted in rust/about.toml"
-    [ -n "$deny" ] || die "the allow list in rust/deny.toml is empty"
-    if [ "$deny" != "$about" ]; then
+    toml_list "$root/rust/deny.toml" licenses allow > "$tmp/deny-allow" \
+        || die "cannot read allow in rust/deny.toml"
+    toml_list "$root/rust/about.toml" "" accepted > "$tmp/about-accepted" \
+        || die "cannot read accepted in rust/about.toml"
+    [ -s "$tmp/deny-allow" ] || die "the allow list in rust/deny.toml is empty"
+    if ! cmp -s "$tmp/deny-allow" "$tmp/about-accepted"; then
         echo "allow in rust/deny.toml and accepted in rust/about.toml differ:" >&2
-        diff <(echo "$deny") <(echo "$about") >&2 || true
+        diff "$tmp/deny-allow" "$tmp/about-accepted" >&2 || true
         exit 1
     fi
 }
@@ -240,8 +244,8 @@ mpl_source() {
 
 # group:module:version of every external module in :app's releaseRuntimeClasspath. Constraints are
 # left out and a requested module that was replaced takes the resolved one ("a:b:1 -> 2" is a:b:2,
-# "a:b:1 -> c:d:2" is c:d:2). A module that did not resolve (FAILED), a project dependency, or a
-# line it cannot read fails.
+# "a:b:1 -> c:d:2" is c:d:2). A module that did not resolve (FAILED, also on a constraint), a
+# project dependency, a coordinate with an empty part, or a tree line it cannot read fails.
 gradle_coordinates() {
     local gradlew=${NOTICES_GRADLEW:-$root/gradlew}
     (cd "$root" && "$gradlew" :app:dependencies --configuration releaseRuntimeClasspath --console=plain) \
@@ -250,14 +254,16 @@ gradle_coordinates() {
         /^releaseRuntimeClasspath - / { inside = 1; next }
         inside && /^$/ { exit }
         function bad(msg) { print msg ": " $0 > "/dev/stderr"; failed = 1 }
+        inside && /^[|+\\ ]/ && !/^([| ]    )*[+\\]--- [^ ]/ { bad("a tree line it cannot read"); next }
         inside && match($0, /[+\\]--- /) {
             t = substr($0, RSTART + 5)
+            if (t ~ / FAILED( |$)/) { bad("a module that did not resolve"); next }
             if (t ~ / \(c\)$/) next
-            if (t ~ / FAILED$/) { bad("a module that did not resolve"); next }
             sub(/ \((\*|n)\)$/, "", t)
             if (t ~ /^project /) { bad("a project dependency"); next }
             n = split(t, side, " -> ")
             m = split(side[1], c, ":")
+            if (c[1] == "" || c[2] == "" || (m == 3 && c[3] == "")) { bad("a coordinate with an empty part"); next }
             if (n == 1 && m == 3) coordinate = side[1]
             else if (n == 2 && (m == 2 || m == 3) && split(side[2], r, ":") == 1) coordinate = c[1] ":" c[2] ":" side[2]
             else if (n == 2 && (m == 2 || m == 3) && split(side[2], r, ":") == 3) coordinate = side[2]
