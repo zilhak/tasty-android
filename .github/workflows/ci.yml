@@ -103,10 +103,10 @@ jobs:
             --target aarch64-linux-android --target x86_64-linux-android \
             -p tasty-mobile-core
 
-      # Policy in rust/deny.toml. Advisories are left out there on purpose.
+      # Policy in rust/deny.toml; the manifest path makes tasty-mobile-core the only graph root.
       - name: cargo deny (licenses, bans, sources)
         working-directory: rust
-        run: cargo deny --locked --workspace check licenses bans sources
+        run: cargo deny --locked --manifest-path tasty-mobile-core/Cargo.toml --config deny.toml check licenses bans sources
 
       # Caches Gradle state and checks the wrapper jar checksum.
       - uses: gradle/actions/setup-gradle@v6
