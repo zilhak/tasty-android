@@ -70,6 +70,25 @@ jobs:
           ANDROID_NDK_HOME="$ANDROID_HOME/ndk/30.0.16248370" \
             cargo ndk -t arm64-v8a -P 29 clippy --workspace --all-targets --locked -- -D warnings
 
+      # Contract 4 of docs/plan/network-access-plan.md: in the release graph of the app cdylib, no
+      # russh-config, no system-ssh on tasty-net-ssh, and no tokio "process" turned on through a
+      # tasty-net crate. tasty-network publishes the check as one script; take it from the rev that
+      # Cargo.lock pins. The release build (cargoNdkBuild) passes no feature arguments.
+      - name: Mobile dependency check (system-ssh, both Android ABIs)
+        working-directory: rust
+        run: |
+          revs=$(grep -oE 'git\+https://github\.com/zilhak/tasty-network\?rev=[0-9a-f]{40}' Cargo.lock | sed 's/.*rev=//' | sort -u || true)
+          if [ "$(printf '%s\n' "$revs" | grep -c .)" -ne 1 ]; then
+            echo "expected one tasty-network rev in Cargo.lock, got: ${revs:-none}" >&2
+            exit 1
+          fi
+          script="$RUNNER_TEMP/check-mobile-deps.sh"
+          curl -fsSL -o "$script" "https://raw.githubusercontent.com/zilhak/tasty-network/$revs/scripts/check-mobile-deps.sh"
+          echo "check-mobile-deps.sh from tasty-network $revs"
+          bash "$script" --manifest-path "$PWD/Cargo.toml" --app \
+            --target aarch64-linux-android --target x86_64-linux-android \
+            -p tasty-mobile-core
+
       # Caches Gradle state and checks the wrapper jar checksum.
       - uses: gradle/actions/setup-gradle@v6
         with:
