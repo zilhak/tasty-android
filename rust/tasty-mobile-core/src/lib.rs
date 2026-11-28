@@ -6,6 +6,7 @@
 //! remote peers (`peer_store`).
 
 mod device;
+mod overview;
 mod peer_store;
 mod snapshot;
 mod tree;
@@ -17,6 +18,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tasty_terminal::{Pty, Terminal, TerminalConfig, TerminalViewport, spawn_terminal};
 
 pub use device::{DeviceKeyError, DeviceKeyInfo, load_or_create_device_key};
+pub use overview::{
+    OverviewError, RemoteSurface, RemoteWorkspace, RemoteWorkspaceOverview,
+    parse_workspace_overview,
+};
 pub use peer_store::{
     PeerKeyError, PeerPin, peer_key_get, peer_key_pin_if_absent, peer_key_reregister,
 };
