@@ -83,8 +83,10 @@ run_cargo_about() {
     local have
     have=$(cargo about --version 2>/dev/null) || die "cargo-about is not installed"
     [ "$have" = "cargo-about $about_version" ] || die "need cargo-about $about_version, found: $have"
+    # -o rather than a redirect: under PowerShell cargo-about refuses to write to a redirected stdout.
     (cd "$root/rust" && cargo about generate --locked --offline --fail \
-        --manifest-path tasty-mobile-core/Cargo.toml -c about.toml about.hbs) | tr -d '\r' > "$tmp/about"
+        --manifest-path tasty-mobile-core/Cargo.toml -c about.toml -o "$tmp/about-raw" about.hbs)
+    tr -d '\r' < "$tmp/about-raw" > "$tmp/about"
     # rust/about.hbs writes three parts, each after a line @@<part>.
     awk -v dir="$tmp" '/^@@/ { part = dir "/" substr($0, 3); printf "" > part; next } part { print > part }' \
         "$tmp/about"
