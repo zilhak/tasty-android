@@ -358,11 +358,7 @@ mod write {
     /// Writes and syncs the record of `id` in a new temporary file in `dir` (created when
     /// missing, private to the app) and returns its path. A failure removes the file.
     fn write_temp(dir: &Path, peer: &PeerRef, id: &DeviceId) -> Result<PathBuf, PeerFileError> {
-        DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(dir)
-            .map_err(|e| PeerFileError::io("create the folder", dir, e))?;
+        create_dirs(dir)?;
         let temp = dir.join(temp_name(peer));
         let mut file = OpenOptions::new()
             .write(true)
@@ -379,6 +375,40 @@ mod write {
             return Err(PeerFileError::io("write", &temp, e));
         }
         Ok(temp)
+    }
+
+    /// Creates `dir` and its missing ancestors one level at a time, private to the app, and
+    /// returns the folders this call created, outermost first. For every folder it tried to
+    /// create, even one another call created at the same time, the folder above is synced so
+    /// the new entry survives a power loss. Folders that were already there are left alone.
+    pub(super) fn create_dirs(dir: &Path) -> Result<Vec<PathBuf>, PeerFileError> {
+        let mut missing = Vec::new();
+        for folder in dir.ancestors() {
+            if folder.as_os_str().is_empty() {
+                break;
+            }
+            match folder.try_exists() {
+                Ok(true) => break,
+                Ok(false) => missing.push(folder),
+                Err(e) => return Err(PeerFileError::io("create the folder", folder, e)),
+            }
+        }
+        let mut created = Vec::new();
+        for folder in missing.into_iter().rev() {
+            match DirBuilder::new().mode(0o700).create(folder) {
+                Ok(()) => created.push(folder.to_owned()),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(PeerFileError::io("create the folder", folder, e)),
+            }
+            let parent = match folder.parent() {
+                Some(parent) if !parent.as_os_str().is_empty() => parent,
+                _ => Path::new("."),
+            };
+            File::open(parent)
+                .and_then(|d| d.sync_all())
+                .map_err(|e| PeerFileError::io("sync the parent folder", parent, e))?;
+        }
+        Ok(created)
     }
 
     /// A temporary file name no other call uses: dot first and `.tmp` last, so it is never a
@@ -679,6 +709,52 @@ mod tests {
             assert_eq!(mode(&path) & 0o777, 0o600);
         }
         assert_eq!(entries(&dir), vec!["p1.id".to_owned()]);
+    }
+
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "android")),
+        ignore = "writes records with renameat2, Linux and Android only"
+    )]
+    #[test]
+    fn the_first_pin_creates_the_missing_folders() {
+        let dir = TempDir::new("folders");
+        let (net, peers) = (dir.0.join("net"), dir.0.join("net").join("peers"));
+        let store = FilePeerKeyStore::new(&peers);
+        assert_eq!(
+            store.pin_if_absent(&peer("p1"), &id(1)).expect("first"),
+            PinOutcome::Inserted
+        );
+        assert_eq!(store.get(&peer("p1")).expect("get"), Some(id(1)));
+        assert!(net.is_dir() && peers.is_dir());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |p: &Path| std::fs::metadata(p).expect("metadata").permissions().mode();
+            assert_eq!(mode(&net) & 0o777, 0o700);
+            assert_eq!(mode(&peers) & 0o777, 0o700);
+        }
+        // Only the folders a call creates are listed (their parents are the ones synced).
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            let (fresh, inner) = (dir.0.join("fresh"), dir.0.join("fresh").join("peers"));
+            assert_eq!(
+                write::create_dirs(&inner).expect("create"),
+                vec![fresh.clone(), inner.clone()]
+            );
+            assert_eq!(
+                write::create_dirs(&inner).expect("again"),
+                Vec::<PathBuf>::new()
+            );
+            let other = fresh.join("other");
+            assert_eq!(
+                write::create_dirs(&other).expect("one level"),
+                vec![other.clone()]
+            );
+            assert_eq!(
+                write::create_dirs(&peers).expect("existing"),
+                Vec::<PathBuf>::new()
+            );
+        }
     }
 
     #[cfg_attr(
