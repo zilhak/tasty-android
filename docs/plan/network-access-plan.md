@@ -2,14 +2,14 @@
 
 ## 1. 목적과 상태
 
-- 상태: **초안**. Codex 계획 검증 3회차까지 끝났다(1회차 24건, 2회차 17건, 3회차 9건을 모두 반영. 규칙에 따라 3회차 반영본은 다시 검증하지 않았다).
+- 상태: **초안**. 이 계획은 검토를 거쳐 고친다.
 - 요청: 2026-11-27의 Android 네트워크 접근 요청. 이 문서는 그 요청의 범위 2(Rust 연결 기반의 구조), 3(attach 등 네트워크 접근 기능의 계획), 4(CI 계획)를 맡는다. 화면 설계는 하지 않는다. 흐름과 필요한 API만 적는다.
 - 기준 커밋:
   - 이 레포 develop `84278b0`.
   - tasty-network develop `b103e9073b9e0e33ac5f586d8cb3b3825f54fa1b`(짧게 `b103e90`). 이 문서에서 `@b103e90`을 붙인 인용은 그 커밋의 파일이다.
   - tasty-network의 모바일 설계(`docs/design/mobile.md`)와 SSH 백엔드 설계(`docs/design/ssh-backends.md`)는 develop `558d4c7`(`558d4c72fa9b541046d3bbafa205771b87dd123c`)에 들어갔다. 이 문서는 그 두 문서를 develop `558d4c7`로 인용한다. 그 전의 진행 중 초안(`bcbcfba`, 그 뒤 수정본 `6bad6ff`)을 인용한 곳은 develop 판과 내용이 달라 그대로 남긴 곳이다(그 초안의 기록이다). 이름과 값은 구현 작업에서 바뀔 수 있다.
   - 사용자 작업 브랜치 `work/android-terminal` `4415132f9e35247b98f328d2d5546b302c5dd8d6`(기점 `ab57f98`, 커밋 9개, 공개 원격에는 아직 없다). 로컬 터미널 화면과 Rust 연결 구조가 들어 있다. 사용자 결정 U1에 따라 이 브랜치는 develop `ccc0022`에 반영됐다(원본 커밋 9개를 develop 위로 올린 커밋과 CI 트리거 커밋 `ccc0022`. 올린 커밋이라 sha는 원본과 다르다. develop push CI 성공). 이 문서는 그 구조를 이어 쓴다.
-- 쓰는 방법: 각 절은 **정해진 것 / 제안 / 결정 대기**로 나눈다. "정해진 것"은 아래 결정 표나 레포 지침에 출처가 있는 것이다. "제안"은 이 계획이 고른 설계이며 Codex 검증과 구현 리뷰에서 바뀔 수 있다. "결정 대기"는 사용자나 다른 레포가 정할 것이다.
+- 쓰는 방법: 각 절은 **정해진 것 / 제안 / 결정 대기**로 나눈다. "정해진 것"은 아래 결정 표나 레포 지침에 출처가 있는 것이다. "제안"은 이 계획이 고른 설계이며 검토와 구현 리뷰에서 바뀔 수 있다. "결정 대기"는 사용자나 다른 레포가 정할 것이다.
 
 ### 결정 표
 
@@ -111,7 +111,7 @@
 - APK 패키징 ABI: `tasty.rustAbis`는 cargo-ndk 출력만 줄인다. `work/android-terminal`의 Gradle에는 `abiFilters`가 없고, JNA `5.19.1` AAR에는 `armeabi-v7a`·`x86` 등의 `libjnidispatch.so`도 들어 있다. 그래서 지금 APK에는 Rust `.so`가 없는 ABI 폴더가 생길 수 있다. 64비트 두 ABI 정책을 `defaultConfig.ndk.abiFilters`(또는 같은 뜻의 패키징 설정)에도 적용해 두 네이티브 라이브러리가 ABI마다 짝을 이루게 한다. 한 ABI만 빌드하는 개발용 `-Ptasty.rustAbis`는 패키징 ABI도 같은 값으로 줄인다.
 - git 의존: tasty-network·tasty rev를 바꾸면 `rust/Cargo.toml`과 `rust/Cargo.lock`이 바뀌므로 지금 입력으로도 다시 돈다. git 의존의 소스는 `CARGO_HOME`의 git 캐시에 받는다. `--locked`는 lock 파일 변경만 막고 네트워크 받기는 막지 않는다. 오프라인 빌드는 목표로 두지 않는다. 캐시가 비어 있으면 받고, 있으면 다시 받지 않는 것이 기대 동작이다.
 - Gradle 빌드 캐시: 두 작업은 `@CacheableTask`가 아니므로 빌드 캐시에 저장되지 않고 최신 여부 확인(up-to-date)만 받는다. `.so` 두 벌은 크고, Rust 쪽은 `rust/target`이 따로 증분을 맡으므로 이대로 둔다. 구성 캐시(`gradle.properties`의 `org.gradle.configuration-cache=true`)와는 지금 구조(`ExecOperations` 주입, provider 연결)가 맞는지 4절 검증 항목으로 본다.
-- 16 KB 페이지: NDK r28 이상은 기본으로 16 KB ELF 정렬을 적용한다. JNA `5.19.1` AAR의 두 대상 ABI `libjnidispatch.so`도 `PT_LOAD` 정렬이 `0x4000`이다(Codex 검증 1회차 확인). 최종 산출물에서는 두 가지를 따로 본다: APK 안 모든 네이티브 라이브러리의 ELF 정렬, 압축하지 않은 `.so` 엔트리의 ZIP 정렬. NDK 기본값은 ZIP 정렬까지 보장하지 않는다.
+- 16 KB 페이지: NDK r28 이상은 기본으로 16 KB ELF 정렬을 적용한다. JNA `5.19.1` AAR의 두 대상 ABI `libjnidispatch.so`도 `PT_LOAD` 정렬이 `0x4000`이다(계획 검토 때 확인). 최종 산출물에서는 두 가지를 따로 본다: APK 안 모든 네이티브 라이브러리의 ELF 정렬, 압축하지 않은 `.so` 엔트리의 ZIP 정렬. NDK 기본값은 ZIP 정렬까지 보장하지 않는다.
 - 증거 요구(무엇으로 입증할지):
   - 깨끗한 칸에서 `assembleDebug` 한 번으로 APK 안에 두 ABI의 `libtasty_mobile_core.so`와 `libjnidispatch.so`가 들어가고, 다른 ABI 폴더는 없다.
   - APK의 모든 `.so`가 16 KB ELF 정렬이고 ZIP 정렬도 맞다.
