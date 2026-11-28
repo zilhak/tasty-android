@@ -2,9 +2,11 @@
 //!
 //! Wraps the desktop `tasty-terminal` crate (PTY + VTE) so Kotlin can run a local shell
 //! and draw its screen. Kotlin owns the theme, so colors cross the boundary unresolved.
-//! It also holds the device key of the Tasty network (`device`).
+//! It also holds the device key of the Tasty network (`device`) and the trusted device IDs of
+//! remote peers (`peer_store`).
 
 mod device;
+mod peer_store;
 mod snapshot;
 mod tree;
 mod workspace;
