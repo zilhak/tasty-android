@@ -42,7 +42,24 @@ class TerminalView(
     var active: Boolean = false
         set(value) {
             field = value
-            if (value && isAttachedToWindow) requestFocus()
+            if (value && !covered && isAttachedToWindow) requestFocus()
+        }
+
+    /**
+     * True while a page covers the terminal. The view then gives up the focus, closes the soft
+     * keyboard, and sends no key or keyboard input to the shell.
+     */
+    var covered: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) {
+                val keyboard = context.getSystemService(InputMethodManager::class.java)
+                windowToken?.let { keyboard?.hideSoftInputFromWindow(it, 0) }
+                composing = ""
+            }
+            isFocusable = !value
+            isFocusableInTouchMode = !value
         }
 
     private val textPaint =
@@ -73,7 +90,7 @@ class TerminalView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         model.addOutputListener(onOutput)
-        if (active) requestFocus()
+        if (active && !covered) requestFocus()
     }
 
     override fun onDetachedFromWindow() {
@@ -310,6 +327,7 @@ class TerminalView(
     ): Boolean = sendKey(event) || super.onKeyDown(keyCode, event)
 
     private fun sendKey(event: KeyEvent): Boolean {
+        if (covered) return false
         val session = model.session ?: return false
         val modifiers = KeyModifiers(ctrl = event.isCtrlPressed, alt = event.isAltPressed, shift = event.isShiftPressed)
         val unicode =
@@ -323,7 +341,7 @@ class TerminalView(
     }
 
     private fun sendText(text: CharSequence) {
-        if (text.isNotEmpty()) model.session?.write(KeyEncoder.text(text))
+        if (!covered && text.isNotEmpty()) model.session?.write(KeyEncoder.text(text))
     }
 
     /**
@@ -361,7 +379,7 @@ class TerminalView(
             beforeLength: Int,
             afterLength: Int,
         ): Boolean {
-            repeat(beforeLength) { model.session?.write(byteArrayOf(DEL)) }
+            if (!covered) repeat(beforeLength) { model.session?.write(byteArrayOf(DEL)) }
             return true
         }
 

@@ -77,6 +77,7 @@ fun WorkspaceScreen(
             model,
             labels,
             popupOpen = popup != null || page != null,
+            pageOpen = page != null,
             openPage = { page = it },
         ) { popup = it }
     Surface(modifier = modifier.fillMaxSize(), color = TastyTokens.bgApp) {
@@ -160,6 +161,8 @@ internal class WorkspaceContext(
     val labels: MenuLabels,
     /** While a popup or a page is open the terminal leaves the focus to it. */
     val popupOpen: Boolean,
+    /** While a page is open no terminal takes the focus or any input. */
+    val pageOpen: Boolean,
     val openPage: (Page) -> Unit,
     val openPopup: (Popup) -> Unit,
 ) {
@@ -281,6 +284,7 @@ private fun SurfaceView(
                 factory = { ctx -> TerminalView(ctx, model.session(surfaceId)) },
                 update = { view ->
                     view.onTap = { if (!focused) model.focusSurface(surfaceId) }
+                    view.covered = scope.context.pageOpen
                     view.active = focused
                     // Take the focus back once a popup that held it closes.
                     if (focused && !scope.context.popupOpen && !view.hasFocus()) view.requestFocus()
